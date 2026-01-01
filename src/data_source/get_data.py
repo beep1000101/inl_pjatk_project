@@ -2,7 +2,7 @@ from datasets import load_dataset
 
 
 from config.config_parser import get_data_source_dataset_id
-from config.paths import CACHE_DATA_DIR
+from config.paths import CACHE_DATA_DIR, dataset_cache_dir
 
 
 def get_dataset():
@@ -15,8 +15,7 @@ def save_dataset_in_cache(dataset):
     CACHE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     dataset_id = get_data_source_dataset_id()
-    dataset_dirname = dataset_id.replace("/", "__")
-    target_dir = CACHE_DATA_DIR / dataset_dirname
+    target_dir = dataset_cache_dir(dataset_id)
 
     if target_dir.exists() and any(target_dir.iterdir()):
         return
