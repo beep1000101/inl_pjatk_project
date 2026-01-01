@@ -31,8 +31,6 @@ def snapshot_dataset(force_reload: bool = False) -> Path:
         repo_id=dataset_id,
         repo_type="dataset",
         local_dir=str(target_dir),
-        local_dir_use_symlinks=False,
-        resume_download=True,
     )
 
     return target_dir
