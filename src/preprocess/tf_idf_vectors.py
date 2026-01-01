@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import sys
+import logging
 
 import joblib
 import numpy as np
@@ -8,6 +10,9 @@ from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.config.paths import CACHE_DIR, poleval2022_passages_path
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_tf_idf_vectorizer(min_df=5,
@@ -36,18 +41,20 @@ def read_jsonl(path: Path, max_rows: int | None = None) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def drop_redirects(df):
+def drop_redirects(df: pd.DataFrame) -> pd.DataFrame:
     mask = ~df["text"].str.startswith(("REDIRECT", "PATRZ"), na=False)
     result = df[mask]
     return result
 
 
-def join_title_and_text(df):
-    result = (df["title"].fillna("") + " " + df["text"].fillna(""))
+def join_title_and_text(df: pd.DataFrame) -> pd.Series:
+    title = df["title"].fillna("").astype(str)
+    text = df["text"].fillna("").astype(str)
+    result = title + " " + text
     return result
 
 
-def preprocess_passages(passage_data):
+def preprocess_passages(passage_data: pd.DataFrame) -> pd.Series:
     corpus = passage_data.pipe(drop_redirects).pipe(join_title_and_text)
     return corpus
 
@@ -90,6 +97,7 @@ def create_wiki_trivia_tf_idf(
         and ids_path.is_file()
         and meta_path.is_file()
     ):
+        logger.info("Cache hit: %s", out_dir)
         return {
             "out_dir": out_dir,
             "vectorizer": vectorizer_path,
@@ -98,10 +106,18 @@ def create_wiki_trivia_tf_idf(
             "meta": meta_path,
         }
 
+    logger.info("Loading passages: %s", passages_path)
     passages_df = load_passages(passages_path, max_rows=max_rows)
+    logger.info("Preprocessing passages")
+    corpus = preprocess_passages(passages_df)
     passages_df = drop_redirects(passages_df).reset_index(drop=True)
-    corpus = passages_df.pipe(join_title_and_text)
 
+    logger.info(
+        "Fitting TF-IDF (min_df=%s, max_df=%s, max_features=%s)",
+        min_df,
+        max_df,
+        max_features,
+    )
     vectorizer = get_tf_idf_vectorizer(
         min_df=min_df,
         max_df=max_df,
@@ -112,6 +128,7 @@ def create_wiki_trivia_tf_idf(
 
     passage_ids = np.asarray(passages_df["id"].astype(str).tolist(), dtype=str)
 
+    logger.info("Saving artifacts: %s", out_dir)
     joblib.dump(vectorizer, vectorizer_path)
     sparse.save_npz(matrix_path, X)
     np.save(ids_path, passage_ids, allow_pickle=False)
@@ -144,5 +161,37 @@ def create_wiki_trivia_tf_idf(
     }
 
 
+PREPROCESSING_REGISTRY = {
+    'wiki-trivia': create_wiki_trivia_tf_idf,
+    'allegro-faq': NotImplementedError,
+    'legal-questions': NotImplementedError
+}
+
+
 def main():
-    ...
+    logging.basicConfig(level=logging.INFO,
+                        format="%(levelname)s:%(name)s:%(message)s")
+    if len(sys.argv) != 2:
+        logger.error(
+            "Usage: python -m src.preprocess.tf_idf_vectors <dataset_name> (supported: wiki-trivia)"
+        )
+        raise SystemExit(2)
+
+    dataset_name = sys.argv[1]
+
+    save_vectorizer_function = PREPROCESSING_REGISTRY.get(dataset_name)
+    if save_vectorizer_function is None:
+        raise ValueError(
+            f"Unknown dataset_name: {dataset_name}. Expected one of: wiki-trivia, allegro-faq, legal-questions"
+        )
+
+    if save_vectorizer_function is NotImplementedError:
+        raise NotImplementedError(
+            f"TF-IDF caching not implemented for: {dataset_name}")
+
+    paths = save_vectorizer_function()
+    logger.info("TF-IDF (%s) cached in: %s", dataset_name, paths["out_dir"])
+
+
+if __name__ == "__main__":
+    main()
