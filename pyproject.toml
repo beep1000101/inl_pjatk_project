@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fasttext>=0.9.3",
     "pandas>=2.3.3",
     "scikit-learn>=1.8.0",
 ]
