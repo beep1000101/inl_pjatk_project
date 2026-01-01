@@ -1,18 +1,9 @@
 from pathlib import Path
 
-# Allow running this file directly (e.g. `python src/data_source/get_data.py`)
-# by ensuring the repo root is on sys.path.
-if __name__ == "__main__" and __package__ is None:
-    import sys
-
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
 from huggingface_hub import snapshot_download
 
-from src.config.config_parser import get_data_source_dataset_id
-from src.config.paths import CACHE_DATA_DIR, dataset_cache_dir
+from config.config_parser import get_data_source_dataset_id
+from config.paths import CACHE_DATA_DIR, dataset_cache_dir
 
 
 def snapshot_dataset(force_reload: bool = False) -> Path:

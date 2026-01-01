@@ -1,6 +1,6 @@
 import tomllib
 
-from src.config.paths import CONFIG_TOML_PATH
+from config.paths import CONFIG_TOML_PATH
 
 
 def load_config() -> dict:

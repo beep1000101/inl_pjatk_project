@@ -1,14 +1,6 @@
 from pathlib import Path
 
 
-# Poleval 2022 dataset layout helpers
-# Repo: piotr-rybak/poleval2022-passage-retrieval-dataset
-# Subdirectories contain:
-# - passages.jl
-# - questions-<split>.jl
-# - pairs-<split>.tsv
-
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
