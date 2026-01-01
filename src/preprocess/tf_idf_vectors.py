@@ -9,10 +9,58 @@ import pandas as pd
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.config.paths import CACHE_DIR, poleval2022_passages_path
+from config.paths import CACHE_DIR, poleval2022_passages_path
 
 
 logger = logging.getLogger(__name__)
+
+
+POLEVAL2022_DATASETS = {"wiki-trivia", "allegro-faq", "legal-questions"}
+
+
+def load_vectorizer(dataset_name: str) -> dict[str, object]:
+    """Load cached TF-IDF artifacts for a dataset.
+
+    Expects artifacts in:
+      .cache/preprocessed_data/tf_idf_vectors/<dataset_name>/
+
+    Returns a dict with keys: out_dir, vectorizer, matrix, passage_ids, meta.
+    """
+    if dataset_name not in POLEVAL2022_DATASETS:
+        raise ValueError(
+            f"Unknown dataset_name: {dataset_name}. Expected one of: wiki-trivia, allegro-faq, legal-questions"
+        )
+
+    out_dir = CACHE_DIR / "preprocessed_data" / "tf_idf_vectors" / dataset_name
+    vectorizer_path = out_dir / "vectorizer.joblib"
+    matrix_path = out_dir / "passages_tfidf.npz"
+    ids_path = out_dir / "passage_ids.npy"
+    meta_path = out_dir / "meta.json"
+
+    missing = [
+        p.name
+        for p in (vectorizer_path, matrix_path, ids_path, meta_path)
+        if not p.is_file()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            f"Missing cached artifacts for {dataset_name} in {out_dir}: {', '.join(missing)}. "
+            f"Run: python -m src.preprocess.tf_idf_vectors {dataset_name}"
+        )
+
+    logger.info("Loading cached TF-IDF artifacts from: %s", out_dir)
+    vectorizer = joblib.load(vectorizer_path)
+    matrix = sparse.load_npz(matrix_path)
+    passage_ids = np.load(ids_path, allow_pickle=False)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+
+    return {
+        "out_dir": out_dir,
+        "vectorizer": vectorizer,
+        "matrix": matrix,
+        "passage_ids": passage_ids,
+        "meta": meta,
+    }
 
 
 def get_tf_idf_vectorizer(min_df=5,
