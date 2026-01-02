@@ -1,12 +1,16 @@
 [project]
 name = "inl-pjatk-project"
 version = "0.1.0"
-description = "Add your description here"
+description = "INL PJATK project"
 readme = "README.md"
-requires-python = ">=3.14"
+
+# This stack REQUIRES Python 3.11
+requires-python = ">=3.11,<3.12"
+
 dependencies = [
+    "faiss-cpu>=1.13.2",
     "fasttext>=0.9.3",
-    "pandas>=2.3.3",
+    "pandas>=2.3.0",
     "scikit-learn>=1.8.0",
 ]
 
