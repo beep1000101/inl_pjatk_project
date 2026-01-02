@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from src.config.paths import CACHE_DIR
+from src.eval.metrics_io import append_metrics_csv, method_submissions_dir, utc_run_id
 from src.eval.retrieval_eval import (
     build_faiss_flat_ip_index,
     build_faiss_ivfpq_ip_index,
@@ -214,6 +215,65 @@ def main() -> None:
         print(f"Precision@{k}: {result.precision_at_k:.4f}")
         print(f"MRR@{k}:       {result.mrr_at_k:.4f}")
         print(f"nDCG@{k}:      {result.ndcg_at_k:.4f}")
+
+    metrics_path = method_submissions_dir("fasttext_faiss") / "metrics.csv"
+    run_id = utc_run_id()
+    append_metrics_csv(
+        csv_path=metrics_path,
+        base_columns=[
+            "run_id",
+            "method",
+            "dataset_id",
+            "subdataset",
+            "questions_split",
+            "pairs_split",
+            "k",
+            "n_questions",
+            "n_labeled",
+            "hits_at_k",
+            "recall_at_k",
+            "precision_at_k",
+            "mrr_at_k",
+            "ndcg_at_k",
+            "out_tsv",
+            "submission_only",
+            "index_type",
+            "index_path",
+            "nprobe",
+            "nlist",
+            "m",
+            "nbits",
+            "train_size",
+            "chunk_size",
+        ],
+        row={
+            "run_id": run_id,
+            "method": "fasttext_faiss",
+            "dataset_id": args.dataset_id,
+            "subdataset": args.subdataset,
+            "questions_split": args.split,
+            "pairs_split": pairs_split,
+            "k": int(args.k),
+            "n_questions": int(result.n_questions),
+            "n_labeled": int(result.n_labeled) if result.n_labeled is not None else None,
+            "hits_at_k": result.hits_at_k,
+            "recall_at_k": result.recall_at_k,
+            "precision_at_k": result.precision_at_k,
+            "mrr_at_k": result.mrr_at_k,
+            "ndcg_at_k": result.ndcg_at_k,
+            "out_tsv": str(result.out_path),
+            "submission_only": bool(args.submission_only),
+            "index_type": args.index_type,
+            "index_path": str(index_path) if index_path is not None else None,
+            "nprobe": int(args.nprobe),
+            "nlist": int(args.nlist),
+            "m": int(args.m),
+            "nbits": int(args.nbits),
+            "train_size": int(args.train_size),
+            "chunk_size": int(args.chunk_size),
+        },
+    )
+    print("Wrote metrics:", metrics_path)
 
 
 if __name__ == "__main__":

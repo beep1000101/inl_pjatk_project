@@ -1,6 +1,10 @@
 import tomllib
 
-from config.paths import CONFIG_TOML_PATH
+try:
+    # Preferred when running from repo root.
+    from src.config.paths import CONFIG_TOML_PATH
+except ModuleNotFoundError:  # pragma: no cover
+    from config.paths import CONFIG_TOML_PATH
 
 
 def load_config() -> dict:

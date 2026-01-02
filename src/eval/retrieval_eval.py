@@ -271,10 +271,9 @@ def evaluate_and_write_submission(
                             f"rank_{j}" for j in range(1, k + 1)])
 
     if out_path is None:
-        out_dir = CACHE_DIR / "submissions"
         prefix = run_name or "tfidf"
-        out_path = out_dir / \
-            f"{prefix}_{subdataset}_questions-{questions_split}.tsv"
+        out_dir = CACHE_DIR / "submissions" / prefix
+        out_path = out_dir / f"{subdataset}_questions-{questions_split}.tsv"
 
     write_submission_tsv(preds_df, out_path)
     logger.info("Wrote TSV: %s", out_path)

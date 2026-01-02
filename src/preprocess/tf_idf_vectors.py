@@ -9,7 +9,12 @@ import pandas as pd
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from config.paths import CACHE_DIR, poleval2022_passages_path
+try:
+    # Preferred when running from repo root (most of this repo uses `src.*`).
+    from src.config.paths import CACHE_DIR, poleval2022_passages_path
+except ModuleNotFoundError:  # pragma: no cover
+    # Fallback for environments that put `src/` directly on PYTHONPATH.
+    from config.paths import CACHE_DIR, poleval2022_passages_path
 
 
 logger = logging.getLogger(__name__)
