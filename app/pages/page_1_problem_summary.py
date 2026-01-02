@@ -56,36 +56,27 @@ All metrics shown in the rest of the app come from experiment logs written as ro
 
 (There are no metrics on this page.)
 
-## Metrics used in this app (simple definitions)
+## Metrics used in this app (formulas, no set notation)
 
-All reported metrics are computed **at cutoff $k$** (typically $k=10$).
+All metrics are computed **at cutoff $k$** (typically $k=10$) and then averaged.
 
-Important implementation details (as implemented in the repo):
+Implementation details (as implemented in the repo):
 - Relevance is **binary** from `pairs-*.tsv`. If a `score` column exists, only rows with `score > 0` count as relevant.
-- Metrics are computed only for **labeled questions** (questions that have at least one relevant passage in the labels), and then averaged.
+- Metrics are computed only for **labeled questions** and averaged over those questions.
 
-For a given question:
-- you have a set of relevant passages $R_q$,
-- and your model produces a ranked list; consider only the top-$k$ results.
+Define:
+- $N$: number of labeled questions.
+- For each labeled question $q$, the model returns a ranked list of top-$k$ passage IDs $p_{q,1},\dots,p_{q,k}$.
+- $y_{q,i}\in\{0,1\}$: whether the passage at rank $i$ is relevant for question $q$.
+- $n_{rel}(q)$: the number of relevant passages for question $q$ in the labels.
 
-The metrics are:
+The repository’s logged metrics correspond to:
 
-- **Hits@k** (`hits_at_k`): did we get *at least one* relevant passage anywhere in the top-$k$?
-  - per question: 1 (yes) / 0 (no)
-  - overall: average of those 0/1 values across labeled questions
-
-- **Recall@k** (`recall_at_k`): what fraction of all relevant passages for that question are included in the top-$k$?
-  - per question: `(# relevant in top-k) / (# relevant total)`
-
-- **Precision@k** (`precision_at_k`): what fraction of the top-$k$ list is relevant?
-  - per question: `(# relevant in top-k) / k`
-
-- **MRR@k** (`mrr_at_k`): how early is the *first* relevant hit in the ranking?
-  - per question: if the first relevant passage is at rank `r` (1..k), score is `1/r`; if no relevant in top-k, score is 0
-
-- **nDCG@k** (`ndcg_at_k`): like precision/recall, but **rank-sensitive** (relevant hits at rank 1 matter more than at rank 10).
-  - this repo uses **binary gains** (relevant=1, not relevant=0)
-  - and then normalizes by the best possible (ideal) ranking for that question
+- **Hits@k** (`hits_at_k`)
+- **Recall@k** (`recall_at_k`)
+- **Precision@k** (`precision_at_k`)
+- **MRR@k** (`mrr_at_k`)
+- **nDCG@k** (`ndcg_at_k`)
 
 Sources (implementation):
 - `src/eval/retrieval_eval.py` (`compute_metrics_at_k`, `load_relevance_pairs`)
@@ -110,25 +101,34 @@ Sources (repo docs):
 """
     )
 
-    with st.expander("Optional: formal formulas"):
-      st.markdown("Symbols: $q$ = question, $k$ = cutoff, $R_q$ = relevant set, $P_q^{(k)}$ = top-$k$ predictions.")
+    st.subheader("Metric formulas")
 
-      st.markdown("**Hits@k** (`hits_at_k`) — any relevant in top-k")
-      st.latex(r"\mathrm{Hits@k}(q) = \mathbb{1}[|R_q \cap P_q^{(k)}| > 0]")
+    st.markdown("**Hits@k** (`hits_at_k`) — averaged over labeled questions")
+    st.latex(
+      r"\mathrm{Hits@k} = \frac{1}{N}\sum_{q=1}^{N} \mathbb{1}\left[\sum_{i=1}^{k} y_{q,i} > 0\right]"
+    )
 
-      st.markdown("**Recall@k** (`recall_at_k`) — fraction of relevant recovered")
-      st.latex(r"\mathrm{Recall@k}(q) = \frac{|R_q \cap P_q^{(k)}|}{|R_q|}")
+    st.markdown("**Recall@k** (`recall_at_k`) — averaged over labeled questions")
+    st.latex(
+      r"\mathrm{Recall@k} = \frac{1}{N}\sum_{q=1}^{N} \frac{\sum_{i=1}^{k} y_{q,i}}{\max(1,n_{rel}(q))}"
+    )
 
-      st.markdown("**Precision@k** (`precision_at_k`) — fraction of top-k that is relevant")
-      st.latex(r"\mathrm{Precision@k}(q) = \frac{|R_q \cap P_q^{(k)}|}{k}")
+    st.markdown("**Precision@k** (`precision_at_k`) — averaged over labeled questions")
+    st.latex(
+      r"\mathrm{Precision@k} = \frac{1}{N}\sum_{q=1}^{N} \frac{1}{k}\sum_{i=1}^{k} y_{q,i}"
+    )
 
-      st.markdown("**MRR@k** (`mrr_at_k`) — reciprocal rank of first relevant (within top-k)")
-      st.latex(
-        r"\mathrm{MRR@k}(q) = \begin{cases}1/r_q & \text{if first relevant is at rank } r_q \le k \\ 0 & \text{otherwise}\end{cases}"
-      )
+    st.markdown("**MRR@k** (`mrr_at_k`) — averaged over labeled questions")
+    st.latex(
+      r"\mathrm{MRR@k} = \frac{1}{N}\sum_{q=1}^{N} \left(\max_{1\le i\le k} \frac{y_{q,i}}{i}\right)"
+    )
 
-      st.markdown("**nDCG@k** (`ndcg_at_k`) — DCG/IDCG with binary gains")
-      st.latex(r"\mathrm{nDCG@k}(q) = \frac{\mathrm{DCG@k}(q)}{\mathrm{IDCG@k}(q)}")
+    st.markdown("**nDCG@k** (`ndcg_at_k`) — averaged over labeled questions")
+    st.latex(r"\mathrm{DCG@k}(q) = \sum_{i=1}^{k} \frac{y_{q,i}}{\log_2(i+1)}")
+    st.latex(r"\mathrm{IDCG@k}(q) = \sum_{i=1}^{\min(k,n_{rel}(q))} \frac{1}{\log_2(i+1)}")
+    st.latex(
+      r"\mathrm{nDCG@k} = \frac{1}{N}\sum_{q=1}^{N} \frac{\mathrm{DCG@k}(q)}{\mathrm{IDCG@k}(q)}"
+    )
 
     root = _project_root()
     dataset_dir = (
