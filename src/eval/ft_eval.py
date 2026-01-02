@@ -51,7 +51,8 @@ def _load_or_build_index(
         return index
 
     if index_type == "flat":
-        logger.info("Building FAISS IndexFlatIP (cosine via NumPy normalization)")
+        logger.info(
+            "Building FAISS IndexFlatIP (cosine via NumPy normalization)")
         index = build_faiss_flat_ip_index(
             passage_vectors=vectors,
             chunk_size=chunk_size,
@@ -168,7 +169,8 @@ def main() -> None:
     # If user didn't specify an index path, do not save (and do not auto-load).
     # You can pass --index-path to reuse the built index across runs.
     if index_path is not None and index_path.is_dir():
-        index_path = index_path / _default_index_path(args.subdataset, args.index_type).name
+        index_path = index_path / \
+            _default_index_path(args.subdataset, args.index_type).name
 
     index = _load_or_build_index(
         vectors=vectors,
