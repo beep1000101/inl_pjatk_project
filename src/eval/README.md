@@ -1,8 +1,13 @@
-# Evaluation (Baselines)
+# Evaluation (Baselines + shared evaluation helpers)
 
-This folder contains CLI scripts to evaluate two retrieval baselines on the POLEVAL2022 passage-retrieval dataset (notably the `wiki-trivia` subdataset).
+This folder contains:
 
-For each question (query), the goal is to retrieve the associated passage(s) and rank them.
+1) CLI scripts to evaluate **single-stage lexical baselines** (TF‑IDF, BM25)
+2) Shared utilities to compute metrics and write PolEval-format submissions
+
+For each question (query), the goal is to retrieve the associated passage(s) and output an ordered top‑$k$ list of passage IDs (the PolEval submission format uses $k=10$).
+
+While the official PolEval metric is **nDCG@10**, the project also reports a small set of standard IR diagnostics (Hits/Recall/Precision/MRR) to make debugging and comparisons easier.
 
 ## Methods
 
@@ -82,3 +87,18 @@ Both scripts accept `--submission-only`.
 Use this when:
 - you only need the TSV for submission, or
 - labels are unavailable for the chosen split.
+
+## Where are hybrid runs evaluated?
+
+Hybrid (two-stage) systems live under:
+
+- `src/eval/hybrid/`
+
+Those scripts still rely on the shared helpers in this folder:
+
+- `retrieval_eval.py` is the common “load questions → retrieve → write TSV → compute metrics” pipeline.
+- `metrics_io.py` is the common “append a stable run row to metrics.csv” logger.
+
+This split is intentional:
+- `src/eval/` stays focused on the common evaluation contract and baselines.
+- `src/eval/hybrid/` focuses on wiring lexical retrievers + rerankers together.
