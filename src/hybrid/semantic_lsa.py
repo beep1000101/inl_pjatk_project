@@ -121,7 +121,6 @@ class LSATfidfCosineReranker:
     """LSA reranker: TruncatedSVD over cached TF-IDF + cosine similarity.
 
     Notes:
-    - Does NOT require FAISS or fastText.
     - Uses cached TF-IDF artifacts from `.cache/preprocessed_data/tf_idf_vectors/<subdataset>/`.
     - Caches only the SVD model under `artifacts/lsa/<subdataset>/` (outside `.cache`).
     - Scores only lexical candidate rows (rerank-only), not the whole corpus.

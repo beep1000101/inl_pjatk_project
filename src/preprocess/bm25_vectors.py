@@ -5,7 +5,6 @@ import argparse
 import json
 import logging
 import re
-import sys
 
 import joblib
 import numpy as np
@@ -108,18 +107,46 @@ def load_bm25(dataset_name: str) -> dict[str, object]:
     try:
         vectorizer = joblib.load(vectorizer_path)
     except AttributeError as e:
-        # Backward-compat for older caches that pickled a custom tokenizer as
-        # __main__.tokenize (when built via `python -m ...`).
-        msg = str(e)
-        if "tokenize" in msg and "__main__" in msg:
-            import sys as _sys
+        # Backward-compat for older caches that pickled a custom tokenizer function.
+        # Depending on how the cache was built, pickle may reference:
+        # - __main__.tokenize (built via `python -m ...`)
+        # - src.eval.hybrid.bm25_lsa_eval.tokenize (built via that module)
+        # - other legacy modules
+        # We can inject our local tokenize into the referenced module to unblock unpickling.
+        import re as _re
+        import sys as _sys
+        import types as _types
 
-            main_mod = _sys.modules.get("__main__")
-            if main_mod is not None and not hasattr(main_mod, "tokenize"):
-                setattr(main_mod, "tokenize", tokenize)
-            vectorizer = joblib.load(vectorizer_path)
-        else:
+        msg = str(e)
+        m = _re.search(
+            r"Can't get attribute 'tokenize' on <module '([^']+)'", msg)
+        module_name = m.group(1) if m else None
+
+        if "tokenize" not in msg:
             raise
+
+        # Always try patching __main__ too, since that's a common legacy target.
+        main_mod = _sys.modules.get("__main__")
+        if main_mod is not None and not hasattr(main_mod, "tokenize"):
+            setattr(main_mod, "tokenize", tokenize)
+
+        if module_name is not None:
+            mod = _sys.modules.get(module_name)
+            if mod is None:
+                mod = _types.ModuleType(module_name)
+                _sys.modules[module_name] = mod
+            if not hasattr(mod, "tokenize"):
+                setattr(mod, "tokenize", tokenize)
+
+        try:
+            vectorizer = joblib.load(vectorizer_path)
+        except AttributeError as e2:
+            raise RuntimeError(
+                f"Failed to load cached BM25 vectorizer from {vectorizer_path}. "
+                "This usually means the cache was built with an older code version that "
+                "pickled a custom tokenizer function. Rebuild the cache with: "
+                f"python -m src.preprocess.bm25_vectors {dataset_name} --force"
+            ) from e2
     matrix = sparse.load_npz(matrix_path).tocsr()
     passage_ids = np.load(ids_path, allow_pickle=False)
     doc_len = np.load(doc_len_path, allow_pickle=False)

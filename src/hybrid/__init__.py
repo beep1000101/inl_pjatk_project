@@ -6,9 +6,7 @@ from src.hybrid.lexical import (
     LexicalCandidates,
     TfidfLexicalRetriever,
 )
-from src.hybrid.pipeline import HybridPipeline, build_hybrid_pipeline
 from src.hybrid.reranker import RerankResult
-from src.hybrid.semantic import FastTextCosineReranker
 
 __all__ = [
 
@@ -16,7 +14,4 @@ __all__ = [
     "RerankResult",
     "TfidfLexicalRetriever",
     "Bm25LexicalRetriever",
-    "FastTextCosineReranker",
-    "HybridPipeline",
-    "build_hybrid_pipeline",
 ]

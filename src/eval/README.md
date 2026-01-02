@@ -12,15 +12,7 @@ For each question (query), the goal is to retrieve the associated passage(s) and
 - Representation: sparse TF-IDF vectors over passages and queries.
 - Retrieval: cosine similarity (implemented as matrix dot-products; when TF-IDF is L2-normalized, dot-product equals cosine).
 
-### 2) fastText embeddings + FAISS
-
-- Script: `src/eval/ft_eval.py`
-- Representation: dense embeddings computed as an average of fastText word vectors.
-- Retrieval: FAISS ANN/exact search over passage embeddings.
-  - `flat` index: exact search (high RAM).
-  - `ivfpq` index: compressed approximate search (lower RAM, requires training; tune `nprobe`).
-
-### 3) BM25 (Okapi)
+### 2) BM25 (Okapi)
 
 - Script: `src/eval/bm25_eval.py`
 - Representation: sparse term-frequency (CountVectorizer) over passages and queries.
@@ -38,7 +30,6 @@ Both scripts write into per-method directories under:
 Where `<method>` is the `run_name` used by the script:
 
 - TF-IDF: `tfidf_cosine`
-- fastText: `fasttext_faiss`
 - BM25: `bm25_okapi`
 
 ### TSV format
@@ -66,20 +57,6 @@ Prerequisite: cached TF-IDF artifacts must exist.
 
 Useful knobs:
 - `--chunk-size`: controls RAM usage (larger can be faster but uses more memory).
-
-### fastText eval
-
-Prerequisite: cached passage vectors must exist.
-
-- Build/cache fastText passage vectors:
-  - `python -m src.preprocess.fasttext_vectors wiki-trivia`
-- Evaluate (exact FAISS):
-  - `python src/eval/ft_eval.py --subdataset wiki-trivia --split test --k 10 --index-type flat`
-
-Useful knobs:
-- `--index-type`: `flat` (exact) or `ivfpq` (compressed approximate).
-- `--nlist --m --nbits --train-size --nprobe`: IVF-PQ parameters.
-- `--index-path`: optional; if provided, the FAISS index will be saved/loaded from disk.
 
 ### BM25 eval
 
