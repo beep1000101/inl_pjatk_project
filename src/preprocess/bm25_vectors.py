@@ -1,16 +1,29 @@
 from __future__ import annotations
 
-from pathlib import Path
 import argparse
 import json
 import logging
 import re
+from pathlib import Path
+from typing import cast
 
-import joblib
-import numpy as np
-import pandas as pd
-from scipy import sparse
-from sklearn.feature_extraction.text import CountVectorizer
+try:
+    import joblib
+    import numpy as np
+    import pandas as pd
+    from scipy import sparse
+    from sklearn.feature_extraction.text import CountVectorizer
+except ModuleNotFoundError as e:  # pragma: no cover
+    missing = getattr(e, "name", None) or str(e)
+    raise ModuleNotFoundError(
+        "Missing runtime dependency while importing BM25 preprocessing. "
+        "This usually happens when the project virtualenv isn't active.\n\n"
+        "Use the project interpreter:\n"
+        "  ./.venv/bin/python -m src.preprocess.bm25_vectors wiki-trivia\n\n"
+        "Or install dependencies (from repo root):\n"
+        "  python -m pip install -e .\n\n"
+        f"Missing module: {missing}"
+    ) from e
 
 try:
     from src.config.paths import CACHE_DIR, poleval2022_passages_path
@@ -226,12 +239,12 @@ def create_wiki_trivia_bm25(
         min_df=min_df,
         max_df=max_df,
         max_features=max_features,
-        token_pattern=r"(?u)\\b\\w+\\b",
+        token_pattern=r"(?u)\b\w+\b",
         lowercase=True,
         dtype=np.int32,
     )
 
-    X = vectorizer.fit_transform(corpus.astype(str).tolist()).tocsr()
+    X = cast(sparse.csr_matrix, vectorizer.fit_transform(corpus.astype(str).tolist()))
     passage_ids = np.asarray(passages_df["id"].astype(str).tolist(), dtype=str)
 
     # doc length and idf

@@ -2,14 +2,14 @@ from pathlib import Path
 
 from huggingface_hub import snapshot_download
 
-try:
+# try:
     # Preferred when running from repo root.
-    from src.config.config_parser import get_data_source_dataset_id
-    from src.config.paths import CACHE_DATA_DIR, dataset_cache_dir
-except ModuleNotFoundError:  # pragma: no cover
-    # Fallback for environments that put `src/` directly on PYTHONPATH.
-    from config.config_parser import get_data_source_dataset_id
-    from config.paths import CACHE_DATA_DIR, dataset_cache_dir
+from src.config.config_parser import get_data_source_dataset_id
+from src.config.paths import CACHE_DATA_DIR, dataset_cache_dir
+# except ModuleNotFoundError:  # pragma: no cover
+#     # Fallback for environments that put `src/` directly on PYTHONPATH.
+#     from config.config_parser import get_data_source_dataset_id
+#     from config.paths import CACHE_DATA_DIR, dataset_cache_dir
 
 
 def snapshot_dataset(force_reload: bool = False) -> Path:

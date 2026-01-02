@@ -163,8 +163,11 @@ class BiEncoderCosineReranker:
         except LocalEntryNotFoundError:
             model_id_or_path = self.model_name
 
+        # Keep around so we can re-init the model on another device if needed.
+        self._model_id_or_path = str(model_id_or_path)
+
         SentenceTransformer = _load_sentence_transformer()
-        self.model = SentenceTransformer(model_id_or_path, device=self.device)
+        self.model = SentenceTransformer(self._model_id_or_path, device=self.device)
         # SentenceTransformer truncation behavior is controlled by max_seq_length.
         self.model.max_seq_length = int(self.max_length)
 
@@ -173,6 +176,32 @@ class BiEncoderCosineReranker:
                 "passage_texts length must match passage_ids length, "
                 f"got texts={len(self.passage_texts)} ids={self.passage_ids.shape[0]}"
             )
+
+    def _switch_device(self, device: str) -> None:
+        """Switch underlying SentenceTransformer device (best-effort).
+
+        We re-initialize the SentenceTransformer to ensure its internal target
+        device is consistent. This is more robust than trying to poke private
+        attributes.
+        """
+
+        device_s = str(device)
+        if device_s == self.device:
+            return
+
+        SentenceTransformer = _load_sentence_transformer()
+        self.model = SentenceTransformer(self._model_id_or_path, device=device_s)
+        self.model.max_seq_length = int(self.max_length)
+        self.device = device_s
+
+    @staticmethod
+    def _is_no_kernel_image_cuda_error(exc: BaseException) -> bool:
+        msg = str(exc).lower()
+        return (
+            "no kernel image is available" in msg
+            or "cudaerrornokernelimagefordevice" in msg
+            or "no kernel image" in msg
+        )
 
     @classmethod
     def from_dataset_cache(
@@ -258,14 +287,36 @@ class BiEncoderCosineReranker:
 
         tq0 = time.monotonic()
         logger.info("Encoding %s queries...", nq)
-        with torch.no_grad():
-            q_emb = self.model.encode(
-                [str(t) for t in query_texts],
-                batch_size=int(self.batch_size),
-                convert_to_tensor=True,
-                show_progress_bar=False,
-                normalize_embeddings=True,
-            )
+        q_emb = None
+        try:
+            with torch.no_grad():
+                q_emb = self.model.encode(
+                    [str(t) for t in query_texts],
+                    batch_size=int(self.batch_size),
+                    convert_to_tensor=True,
+                    show_progress_bar=False,
+                    normalize_embeddings=True,
+                )
+        except Exception as e:  # noqa: BLE001
+            # Common failure mode: GPU exists, but torch CUDA build doesn't support its compute capability.
+            if str(self.device).startswith("cuda") and self._is_no_kernel_image_cuda_error(e):
+                logger.warning(
+                    "CUDA kernel image not available for this GPU with current PyTorch build. "
+                    "Falling back to CPU. Original error: %s",
+                    e,
+                )
+                self._switch_device("cpu")
+                with torch.no_grad():
+                    q_emb = self.model.encode(
+                        [str(t) for t in query_texts],
+                        batch_size=int(self.batch_size),
+                        convert_to_tensor=True,
+                        show_progress_bar=False,
+                        normalize_embeddings=True,
+                    )
+            else:
+                raise
+        assert q_emb is not None
         logger.info("Encoded queries in %.1fs", time.monotonic() - tq0)
 
         out_idx = np.empty((nq, top_n), dtype=np.int32)
@@ -279,14 +330,35 @@ class BiEncoderCosineReranker:
             lex_row = cand_lex[i][:rk]
 
             cand_texts = [self.passage_texts[int(j)] for j in idx_row.tolist()]
-            with torch.no_grad():
-                p_emb = self.model.encode(
-                    cand_texts,
-                    batch_size=int(self.batch_size),
-                    convert_to_tensor=True,
-                    show_progress_bar=False,
-                    normalize_embeddings=True,
-                )
+            try:
+                with torch.no_grad():
+                    p_emb = self.model.encode(
+                        cand_texts,
+                        batch_size=int(self.batch_size),
+                        convert_to_tensor=True,
+                        show_progress_bar=False,
+                        normalize_embeddings=True,
+                    )
+            except Exception as e:  # noqa: BLE001
+                if str(self.device).startswith("cuda") and self._is_no_kernel_image_cuda_error(e):
+                    logger.warning(
+                        "CUDA kernel image not available during passage encoding; falling back to CPU. "
+                        "Original error: %s",
+                        e,
+                    )
+                    self._switch_device("cpu")
+                    # Ensure query embeddings are on CPU too.
+                    q_emb = q_emb.detach().to("cpu")
+                    with torch.no_grad():
+                        p_emb = self.model.encode(
+                            cand_texts,
+                            batch_size=int(self.batch_size),
+                            convert_to_tensor=True,
+                            show_progress_bar=False,
+                            normalize_embeddings=True,
+                        )
+                else:
+                    raise
 
             # Cosine similarity for normalized embeddings is dot product.
             sem = (p_emb @ q_emb[i]
