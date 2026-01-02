@@ -21,7 +21,10 @@ class EvalResult:
     k: int
     n_questions: int
     hits_at_k: float | None = None
+    recall_at_k: float | None = None
+    precision_at_k: float | None = None
     mrr_at_k: float | None = None
+    ndcg_at_k: float | None = None
     n_labeled: int | None = None
 
 
@@ -112,6 +115,83 @@ def compute_hits_mrr_at_k(
     return hits / n, rr_sum / n, n
 
 
+def compute_metrics_at_k(
+    preds_df: pd.DataFrame,
+    rel_by_q: dict[int, set[str]],
+    *,
+    k: int,
+) -> tuple[
+    float | None,  # hits@k
+    float | None,  # recall@k
+    float | None,  # precision@k
+    float | None,  # mrr@k
+    float | None,  # ndcg@k
+    int,
+]:
+    """Compute common IR metrics at k using binary relevance.
+
+    Definitions (averaged over labeled questions):
+    - Hits@k: 1 if any relevant in top-k else 0
+    - Recall@k: |relevant ∩ top-k| / |relevant|
+    - Precision@k: |relevant ∩ top-k| / k
+    - MRR@k: 1 / rank of first relevant (within top-k), else 0
+    - nDCG@k: DCG/IDCG with binary gains
+    """
+
+    hit_sum = 0.0
+    recall_sum = 0.0
+    precision_sum = 0.0
+    rr_sum = 0.0
+    ndcg_sum = 0.0
+    n = 0
+
+    discounts = 1.0 / np.log2(np.arange(2, k + 2, dtype=np.float32))
+
+    for qid, row in preds_df.iterrows():
+        rel = rel_by_q.get(int(str(qid)))
+        if not rel:
+            continue
+
+        n += 1
+        ranked = [str(x) for x in row.tolist()[:k] if str(x)]
+
+        hits = 0
+        first_rank = None
+        dcg = 0.0
+
+        for i, pid in enumerate(ranked[:k], start=1):
+            if pid in rel:
+                hits += 1
+                if first_rank is None:
+                    first_rank = i
+                dcg += float(discounts[i - 1])
+
+        if hits > 0:
+            hit_sum += 1.0
+            rr_sum += 1.0 / \
+                float(first_rank if first_rank is not None else k + 1)
+
+        recall_sum += hits / max(1, len(rel))
+        precision_sum += hits / k
+
+        idcg_len = min(k, len(rel))
+        if idcg_len > 0:
+            idcg = float(discounts[:idcg_len].sum())
+            ndcg_sum += (dcg / idcg) if idcg > 0 else 0.0
+
+    if n == 0:
+        return None, None, None, None, None, 0
+
+    return (
+        hit_sum / n,
+        recall_sum / n,
+        precision_sum / n,
+        rr_sum / n,
+        ndcg_sum / n,
+        n,
+    )
+
+
 def write_submission_tsv(preds_df: pd.DataFrame, out_path: Path) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     preds_df.to_csv(out_path, sep="\t", header=False, index=False)
@@ -146,19 +226,31 @@ def evaluate_and_write_submission(
     write_submission_tsv(preds_df, out_path)
 
     hits_at_k = None
+    recall_at_k = None
+    precision_at_k = None
     mrr_at_k = None
+    ndcg_at_k = None
     n_labeled = None
     if pairs_split is not None:
         rel_by_q = load_relevance_pairs(dataset_id, subdataset, pairs_split)
-        hits_at_k, mrr_at_k, n_labeled = compute_hits_mrr_at_k(
-            preds_df, rel_by_q, k=k)
+        (
+            hits_at_k,
+            recall_at_k,
+            precision_at_k,
+            mrr_at_k,
+            ndcg_at_k,
+            n_labeled,
+        ) = compute_metrics_at_k(preds_df, rel_by_q, k=k)
 
     return EvalResult(
         out_path=out_path,
         k=k,
         n_questions=len(q_texts),
         hits_at_k=hits_at_k,
+        recall_at_k=recall_at_k,
+        precision_at_k=precision_at_k,
         mrr_at_k=mrr_at_k,
+        ndcg_at_k=ndcg_at_k,
         n_labeled=n_labeled,
     )
 
