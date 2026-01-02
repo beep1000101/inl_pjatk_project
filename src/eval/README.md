@@ -20,6 +20,14 @@ For each question (query), the goal is to retrieve the associated passage(s) and
   - `flat` index: exact search (high RAM).
   - `ivfpq` index: compressed approximate search (lower RAM, requires training; tune `nprobe`).
 
+### 3) BM25 (Okapi)
+
+- Script: `src/eval/bm25_eval.py`
+- Representation: sparse term-frequency (CountVectorizer) over passages and queries.
+- Retrieval: Okapi BM25 scoring (k1/b) computed in passage chunks.
+
+BM25 uses an explicit, deterministic tokenizer: lowercased `\w+` tokens.
+
 ## Outputs
 
 Both scripts write into per-method directories under:
@@ -31,6 +39,7 @@ Where `<method>` is the `run_name` used by the script:
 
 - TF-IDF: `tfidf_cosine`
 - fastText: `fasttext_faiss`
+- BM25: `bm25_okapi`
 
 ### TSV format
 
@@ -71,6 +80,19 @@ Useful knobs:
 - `--index-type`: `flat` (exact) or `ivfpq` (compressed approximate).
 - `--nlist --m --nbits --train-size --nprobe`: IVF-PQ parameters.
 - `--index-path`: optional; if provided, the FAISS index will be saved/loaded from disk.
+
+### BM25 eval
+
+Prerequisite: cached BM25 term-frequency artifacts must exist.
+
+- Build/cache BM25 artifacts for `wiki-trivia`:
+  - `python -m src.preprocess.bm25_vectors wiki-trivia`
+- Evaluate:
+  - `python src/eval/bm25_eval.py --subdataset wiki-trivia --split test --k 10`
+
+Useful knobs:
+- `--k1`, `--b`: BM25 parameters.
+- `--chunk-size`: RAM/speed tradeoff.
 
 ## What does --submission-only do?
 

@@ -376,6 +376,99 @@ def retrieve_tfidf_topk(
     return passage_ids[top_idx]
 
 
+def retrieve_bm25_topk(
+    *,
+    vectorizer: Any,
+    passages_matrix: Any,
+    passage_ids: np.ndarray,
+    idf: np.ndarray,
+    doc_len: np.ndarray,
+    avgdl: float,
+    query_texts: list[str],
+    k: int = 10,
+    k1: float = 1.5,
+    b: float = 0.75,
+    chunk_size: int = 10_000,
+    progress: ProgressFn | None = None,
+) -> np.ndarray:
+    """Vectorized BM25 (Okapi) retrieval over a sparse term-frequency matrix.
+
+    We compute BM25 scores in passage chunks to bound memory, and keep top-k per
+    query across chunks.
+
+    The document-term matrix must contain raw term counts (not TF-IDF).
+    """
+
+    if k <= 0:
+        raise ValueError("k must be > 0")
+
+    # Query term counts -> binarize (presence) to keep query weighting simple/deterministic.
+    Q = vectorizer.transform(query_texts)
+    Q = Q.tocsr(copy=True)
+    if Q.nnz:
+        Q.data[:] = 1.0
+
+    nq = int(Q.shape[0])
+    X = passages_matrix
+    N = int(X.shape[0])
+    if int(doc_len.shape[0]) != N:
+        raise ValueError(
+            f"doc_len length must equal N={N}, got {doc_len.shape[0]}")
+
+    idf = np.asarray(idf, dtype=np.float32)
+    dl = np.asarray(doc_len, dtype=np.float32)
+    avgdl_f = float(avgdl) if float(avgdl) > 0 else 1.0
+
+    top_scores = np.full((nq, k), -np.inf, dtype=np.float32)
+    top_idx = np.full((nq, k), -1, dtype=np.int32)
+
+    for start in range(0, N, int(chunk_size)):
+        end = min(start + int(chunk_size), N)
+
+        Xb = X[start:end].tocsr()
+        B = int(Xb.shape[0])
+        if B == 0:
+            continue
+
+        # Per-doc BM25 length normalization term.
+        K = (float(k1) * (1.0 - float(b) + float(b) * (dl[start:end] / avgdl_f))).astype(
+            np.float32, copy=False
+        )
+
+        # Build a BM25-weighted sparse matrix for this chunk.
+        Wb = Xb.copy()
+        row_nnz = np.diff(Wb.indptr).astype(np.int32, copy=False)
+        if Wb.nnz:
+            row_idx = np.repeat(np.arange(B, dtype=np.int32), row_nnz)
+            tf = Wb.data.astype(np.float32, copy=False)
+            denom = tf + K[row_idx]
+            tf_norm = (tf * (float(k1) + 1.0)) / np.maximum(denom, 1e-12)
+            Wb.data = (tf_norm * idf[Wb.indices]
+                       ).astype(np.float32, copy=False)
+
+        sims = (Wb @ Q.T).toarray().astype(np.float32, copy=False)  # (B, nq)
+        k_local = min(k, B)
+        idx_local = np.argpartition(-sims, kth=k_local -
+                                    1, axis=0)[:k_local, :]
+        scores_local = np.take_along_axis(sims, idx_local, axis=0)
+        idx_local = idx_local + start
+
+        comb_scores = np.concatenate([top_scores.T, scores_local], axis=0)
+        comb_idx = np.concatenate([top_idx.T, idx_local], axis=0)
+        sel = np.argpartition(-comb_scores, kth=k - 1, axis=0)[:k, :]
+
+        top_scores = np.take_along_axis(comb_scores, sel, axis=0).T
+        top_idx = np.take_along_axis(comb_idx, sel, axis=0).T
+
+        if progress is not None:
+            progress(end, N)
+
+    order = np.argsort(-top_scores, axis=1)
+    top_idx = np.take_along_axis(top_idx, order, axis=1)
+
+    return passage_ids[top_idx]
+
+
 def embed_fasttext_avg(
     *,
     model: Any,
