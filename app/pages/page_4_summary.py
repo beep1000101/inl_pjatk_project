@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -140,6 +141,92 @@ Sources (repo docs):
         df[show_cols].sort_values(["k", "ndcg_at_k"], ascending=[True, False]),
         width="stretch",
     )
+
+    st.subheader("Compare metrics (toggle)")
+    metric_options = [
+        "ndcg_at_k",
+        "mrr_at_k",
+        "recall_at_k",
+        "precision_at_k",
+        "hits_at_k",
+    ]
+    selected_metrics = st.multiselect(
+        "Metrics",
+        options=metric_options,
+        default=["ndcg_at_k"],
+    )
+    k_values = sorted([k for k in df["k"].dropna().unique().tolist()])
+    selected_k = st.selectbox("k", options=k_values) if k_values else None
+
+    if selected_metrics and selected_k is not None:
+        plot_df = df[df["k"] == selected_k].copy()
+        for metric in selected_metrics:
+            plot_df[metric] = pd.to_numeric(plot_df[metric], errors="coerce")
+
+        long_df = plot_df[["method", "k"] + selected_metrics].melt(
+            id_vars=["method", "k"],
+            var_name="metric",
+            value_name="value",
+        )
+        long_df = long_df.dropna(subset=["value"])
+
+        metric_toggle = alt.selection_point(fields=["metric"], bind="legend")
+        chart = (
+            alt.Chart(long_df)
+            .mark_bar()
+            .encode(
+                x=alt.X("method:N", title="method", sort=methods),
+                y=alt.Y("value:Q", title="value"),
+                color=alt.Color("metric:N", title="metric", scale=alt.Scale(scheme="tableau10")),
+                xOffset="metric:N",
+                tooltip=[
+                    alt.Tooltip("method:N"),
+                    alt.Tooltip("metric:N"),
+                    alt.Tooltip("k:Q"),
+                    alt.Tooltip("value:Q", format=".6f"),
+                ],
+            )
+            .add_params(metric_toggle)
+            .transform_filter(metric_toggle)
+            .properties(height=320)
+            .configure_view(strokeWidth=0)
+            .configure_axis(
+                labelColor="white",
+                titleColor="white",
+                gridColor="rgba(255,255,255,0.10)",
+                tickColor="rgba(255,255,255,0.25)",
+                domainColor="rgba(255,255,255,0.25)",
+            )
+            .configure_legend(
+                labelColor="white",
+                titleColor="white",
+            )
+        )
+        st.altair_chart(chart, width="stretch")
+    else:
+        st.info("Select at least one metric to plot.")
+
+    with st.expander("What do these metrics mean?"):
+        # Streamlit multipage link (relative to app/main.py)
+        if hasattr(st, "page_link"):
+            st.page_link(
+                "pages/page_1_problem_summary.py",
+                label="Open: Problem summary (metric formulas)",
+            )
+        else:
+            st.markdown("See the **Problem summary** page for full metric formulas.")
+
+        st.markdown(
+            """
+- **Hits@k**: whether at least one relevant passage appears anywhere in the top-$k$.
+- **Recall@k**: fraction of relevant passages retrieved in the top-$k$ (per question).
+- **Precision@k**: fraction of the top-$k$ retrieved passages that are relevant.
+- **MRR@k**: rewards placing the first relevant passage as high as possible (1/rank), truncated at $k$.
+- **nDCG@k**: rank-sensitive metric that rewards putting relevant passages near the top; normalized per question.
+
+These are computed at the selected $k$ and then averaged over labeled questions, exactly as implemented in `src/eval/retrieval_eval.py`.
+"""
+        )
 
     st.subheader("Best method (by ndcg_at_k)")
     comparable = df.dropna(subset=["ndcg_at_k", "k"]).copy()

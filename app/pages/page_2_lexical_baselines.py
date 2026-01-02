@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -165,8 +166,96 @@ Sources (repo docs):
         cal["hits_at_k"] = pd.to_numeric(cal["hits_at_k"], errors="coerce")
         cal = cal.dropna(subset=["k", "hits_at_k"]).sort_values(["method", "k"])
 
-        pivot = cal.pivot_table(index="k", columns="method", values="hits_at_k", aggfunc="mean")
-        st.line_chart(pivot)
+        # Plot metric (y) vs k (x). The calibration CSV only contains Hits@k curves,
+        # so additional options are derived from the logged hits_at_k series.
+        cal["hits_at_max_k"] = cal.groupby("method")["hits_at_k"].transform("max")
+        cal["hits_norm_to_max_k"] = cal["hits_at_k"] / cal["hits_at_max_k"]
+        cal["k_fraction_of_max"] = cal["k"] / cal["max_k"]
+        cal["hits_per_k"] = cal["hits_at_k"] / cal["k"]
+
+        cal = cal.sort_values(["method", "k"])
+        cal["marginal_hits_gain"] = cal.groupby("method")["hits_at_k"].diff()
+        cal["marginal_k"] = cal.groupby("method")["k"].diff()
+        cal["marginal_hits_per_doc"] = cal["marginal_hits_gain"] / cal["marginal_k"]
+
+        metric_label_to_col = {
+            "hits_at_k": "hits_at_k",
+            "hits_norm_to_max_k": "hits_norm_to_max_k",
+            "hits_per_k": "hits_per_k",
+            "marginal_hits_gain": "marginal_hits_gain",
+            "marginal_hits_per_doc": "marginal_hits_per_doc",
+            "k_fraction_of_max": "k_fraction_of_max",
+        }
+        selected_metric_label = st.selectbox(
+            "Metric (y-axis)",
+            options=list(metric_label_to_col.keys()),
+            index=0,
+        )
+        metric_col = metric_label_to_col[selected_metric_label]
+
+        plot_df = cal[["method", "k", metric_col]].dropna(subset=[metric_col]).copy()
+
+        legend_toggle = alt.selection_point(fields=["method"], bind="legend")
+        chart = (
+            alt.Chart(plot_df)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X("k:Q", title="k"),
+                y=alt.Y(f"{metric_col}:Q", title=selected_metric_label),
+                color=alt.Color(
+                    "method:N",
+                    title="method",
+                    # User-requested palette: orange + white
+                    scale=alt.Scale(domain=["bm25", "tfidf"], range=["#FF7F0E", "#FFFFFF"]),
+                ),
+                tooltip=[
+                    alt.Tooltip("method:N"),
+                    alt.Tooltip("k:Q"),
+                    alt.Tooltip(f"{metric_col}:Q", format=".6f"),
+                ],
+            )
+            .add_params(legend_toggle)
+            .transform_filter(legend_toggle)
+            .properties(height=320)
+            .configure(background="transparent")
+            .configure_view(strokeWidth=0)
+            .configure_axis(
+                labelColor="white",
+                titleColor="white",
+                gridColor="rgba(255,255,255,0.10)",
+                tickColor="rgba(255,255,255,0.25)",
+                domainColor="rgba(255,255,255,0.25)",
+            )
+            .configure_legend(
+                labelColor="white",
+                titleColor="white",
+            )
+        )
+        st.altair_chart(chart, width="stretch")
+
+        with st.expander("What do these calibration metrics mean?"):
+            if hasattr(st, "page_link"):
+                st.page_link(
+                    "pages/page_1_problem_summary.py",
+                    label="Open: Problem summary (metric formulas)",
+                )
+            else:
+                st.markdown("See the **Problem summary** page for full metric formulas.")
+
+            st.markdown(
+                """
+This calibration file contains a **Hits@k curve** (per method) and we plot a selected metric against $k$:
+
+- **hits_at_k**: same as Hits@k from the Problem Summary page, evaluated for varying $k$.
+- **hits_norm_to_max_k**: $\mathrm{Hits@k} / \max_{k'} \mathrm{Hits@k'}$ within the same method (normalizes to 1.0 at the best observed $k$).
+- **hits_per_k**: $\mathrm{Hits@k} / k$ (a simple “hits per retrieved doc” proxy).
+- **marginal_hits_gain**: change in Hits@k between two consecutive sampled $k$ points.
+- **marginal_hits_per_doc**: $\Delta\mathrm{Hits@k} / \Delta k$ between sampled points (slope of the curve).
+- **k_fraction_of_max**: $k / \mathrm{max\_k}$ (how far along the calibration range you are).
+
+All derived metrics are computed **only from this calibration CSV**; the only “true” IR metric logged here is Hits@k.
+"""
+            )
 
         with st.expander("Show calibration table"):
             # Only show columns that are in the allow-list.
