@@ -206,7 +206,7 @@ Compute a score vector $u$ by taking cosine similarity between each row $M_i$ an
 
 $$
 u \in \mathbb{R}^{10},\quad
-u_i = \cos(M_i, v)
+u_i = \cos(M_i, v) = \frac{M_i \cdot v}{\lVert M_i \rVert\,\lVert v \rVert}
 $$
 
 (where $M_i$ is the $i$-th row of $M$).
@@ -219,7 +219,7 @@ $$
 Pick the indices of the best $k$ scores:
 
 $$
-	ext{indices} = \operatorname{argmax}_k(u)
+	indices_{ext} = \operatorname{argmax}_k(u)
 $$
 """
         )
