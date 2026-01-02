@@ -41,6 +41,17 @@ def _project_root() -> Path:
 
 
 @st.cache_data(show_spinner=False)
+def _load_toy_passages() -> pd.DataFrame:
+    root = _project_root()
+    path = root / "app" / "data" / "toy_passages.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    # Keep a stable integer index for the "lookup indices" explanation.
+    return df.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
 def _load_all_metrics() -> pd.DataFrame:
     root = _project_root()
     submissions_dir = root / ".cache" / "submissions"
@@ -151,6 +162,78 @@ Sources (repo docs):
         "chunk_size",
     ]
     st.dataframe(lexical[show_cols], width="stretch")
+
+    st.subheader("Toy example: lexical retrieval in vector space")
+    st.caption("A minimal walkthrough: passages → (made-up) matrix M → query vector q → cosine similarity → top indices → lookup")
+
+    toy = _load_toy_passages()
+    if toy.empty:
+        st.info("Toy passages not found at app/data/toy_passages.csv")
+    else:
+        st.markdown("**Dummy passage table (10 rows)**")
+        st.dataframe(toy, width="stretch")
+
+        query = st.text_input("Query", value="What is the capital of France?")
+
+        st.markdown("↓ Cast passages to vector space")
+
+        st.markdown(
+            r"""
+We represent the 10 passages as a matrix in some vector space:
+
+$$
+M \in \mathbb{R}^{10\times d},\quad
+M=\begin{bmatrix}
+m_{0,0} & \cdots & m_{0,d-1}\\
+\vdots & \ddots & \vdots\\
+m_{9,0} & \cdots & m_{9,d-1}
+\end{bmatrix}
+$$
+
+and the query as a vector:
+
+$$
+v \in \mathbb{R}^{d},\quad
+v = [v_0,\ldots,v_{d-1}]^\top
+$$
+"""
+        )
+
+        st.markdown("↓ Compute cosine similarity")
+        st.markdown(
+            r"""
+Compute a score vector $u$ by taking cosine similarity between each row $M_i$ and the query vector $v$:
+
+$$
+u \in \mathbb{R}^{10},\quad
+u_i = \cos(M_i, v)
+$$
+
+(where $M_i$ is the $i$-th row of $M$).
+"""
+        )
+
+        st.markdown("↓ Pick best k indices")
+        st.markdown(
+            r"""
+Pick the indices of the best $k$ scores:
+
+$$
+	ext{indices} = \operatorname{argmax}_k(u)
+$$
+"""
+        )
+
+        st.markdown("↓ Use these indices for lookup")
+        top_k = 5
+        # Example indices for demonstration (derived from u in a real system).
+        indices = [2, 3, 8, 0, 9][:top_k]
+        st.markdown(f"Example: **indices** = {indices}")
+
+        lookup = toy.iloc[indices].copy()
+        lookup.insert(0, "index", indices)
+        lookup.insert(1, "query", query)
+        st.dataframe(lookup[["index", "query", "passage_id", "text"]], width="stretch")
 
     st.subheader("Calibration: Hits@k vs k (wiki-trivia)")
     st.caption("Field: hits_at_k. Source: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
