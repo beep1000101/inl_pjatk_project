@@ -78,41 +78,37 @@ def _wiki_trivia_only(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def page() -> None:
-    st.title("Final Summary")
-    st.caption("Best method is selected by hits_at_k, within comparable runs.")
+    st.title("Podsumowanie końcowe")
+    st.caption("Najlepsza metoda jest wybierana na podstawie hits_at_k, wśród porównywalnych uruchomień.")
 
     st.markdown(
         """
-### How to read this summary (repo rationale)
+### Jak czytać to podsumowanie
 
-- On this page we treat **Hits@k** as the main “did we retrieve anything relevant?” signal.
-- Rank-sensitive metrics (MRR/nDCG) are still useful for diagnosing whether improvements come from
-    “more hits anywhere in top‑k” vs “better ordering at the very top”.
-
-Sources (repo docs):
-- `src/eval/README.md`
-- `results/README.md`
+- Na tej stronie traktujemy **Hits@k** jako główny sygnał typu „czy znaleźliśmy cokolwiek trafnego?”.
+- Metryki wrażliwe na pozycję (MRR/nDCG) są nadal przydatne, bo pomagają rozróżnić:
+    „więcej trafień gdziekolwiek w top‑k” vs „lepsze ułożenie na samym szczycie listy”.
 """
     )
 
-    st.subheader("Interpretation: what tends to happen")
+    st.subheader("Interpretacja: co zwykle się dzieje")
     st.markdown(
         """
-- **Lexical retrieval is fast**: TF‑IDF/BM25 are sparse, cache-friendly, and scale well as a first pass.
-- **Reranking makes sense as a funnel**: lexical methods cheaply narrow the search space to a small candidate set,
-    then a more precise model reranks only those candidates.
-- **The reranker could be different**: this repo uses a bi-encoder in the logged hybrid runs, but the same funnel
-    pattern works with other rerankers too (e.g., cross-encoders, LSA/SVD projections, learned rankers), as long as
-    they score a limited candidate list.
+- **Retrieval leksykalny jest szybki**: TF‑IDF/BM25 są rzadkie (sparse), dobrze działają z cache i dobrze skalują się
+  jako pierwszy etap.
+- **Reranking ma sens jako lejek**: metody leksykalne tanio zawężają przestrzeń wyszukiwania do małego zbioru kandydatów,
+  a dokładniejszy model przestawia kolejność tylko wśród tych kandydatów.
+- **Reranker może być inny**: w zarejestrowanych uruchomieniach użyto bi-encodera, ale ten sam schemat „lejka” działa też
+  z innymi rerankerami (np. cross-encoder, LSA/SVD, learned rankers), o ile punktują ograniczoną listę kandydatów.
 
-So if a hybrid method increases `hits_at_k`, it often means the funnel is finding at least one relevant passage
-more often—even if rank-sensitive metrics don’t always move in the same way.
+Jeśli metoda hybrydowa zwiększa `hits_at_k`, zwykle oznacza to, że lejek częściej „dowozi” przynajmniej jeden trafny
+passage — nawet jeśli metryki wrażliwe na pozycję nie zawsze rosną w tym samym stopniu.
 """
     )
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
         return
 
     methods = [
@@ -123,14 +119,14 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
     ]
     df = df[df["method"].isin(methods)].copy()
     if df.empty:
-        st.error("No eligible runs found for summary.")
+        st.error("Brak uruchomień kwalifikujących się do podsumowania.")
         return
 
     df["hits_at_k"] = pd.to_numeric(df["hits_at_k"], errors="coerce")
     df["ndcg_at_k"] = pd.to_numeric(df["ndcg_at_k"], errors="coerce")
     df["k"] = pd.to_numeric(df["k"], errors="coerce")
 
-    st.subheader("Comparable runs (wiki-trivia)")
+    st.subheader("Porównywalne uruchomienia (wiki-trivia)")
     show_cols = [
         "method",
         "dataset_id",
@@ -158,7 +154,7 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         width="stretch",
     )
 
-    st.subheader("Compare metric")
+    st.subheader("Porównaj metrykę")
     metric_options = [
         "hits_at_k",
         "ndcg_at_k",
@@ -167,7 +163,7 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         "precision_at_k",
     ]
     selected_metric = st.selectbox(
-        "Metric",
+        "Metryka",
         options=metric_options,
         index=0,
     )
@@ -185,7 +181,7 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
             .encode(
                 x=alt.X(
                     "method:N",
-                    title="method",
+                    title="metoda",
                     sort=methods,
                     axis=alt.Axis(labelAngle=0),
                 ),
@@ -213,34 +209,34 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         )
         st.altair_chart(chart, width="stretch")
     else:
-        st.info("Select k to plot.")
+        st.info("Wybierz k, aby narysować wykres.")
 
-    with st.expander("What do these metrics mean?"):
+    with st.expander("Co oznaczają te metryki?"):
         # Streamlit multipage link (relative to app/main.py)
         if hasattr(st, "page_link"):
             st.page_link(
-                "pages/page_1_problem_summary.py",
-                label="Open: Problem summary (metric formulas)",
+                "pages/01_podsumowanie_problemu.py",
+                label="Otwórz: Podsumowanie problemu (wzory metryk)",
             )
         else:
-            st.markdown("See the **Problem summary** page for full metric formulas.")
+            st.markdown("Pełne wzory metryk są na stronie **Podsumowanie problemu**.")
 
         st.markdown(
             """
-- **Hits@k**: whether at least one relevant passage appears anywhere in the top-$k$.
-- **Recall@k**: fraction of relevant passages retrieved in the top-$k$ (per question).
-- **Precision@k**: fraction of the top-$k$ retrieved passages that are relevant.
-- **MRR@k**: rewards placing the first relevant passage as high as possible (1/rank), truncated at $k$.
-- **nDCG@k**: rank-sensitive metric that rewards putting relevant passages near the top; normalized per question.
+    - **Hits@k**: czy co najmniej jeden trafny passage pojawia się gdziekolwiek w top‑$k$.
+    - **Recall@k**: odsetek trafnych passage’ów odzyskanych w top‑$k$ (dla pojedynczego pytania).
+    - **Precision@k**: odsetek trafnych passage’ów wśród top‑$k$ zwróconych.
+    - **MRR@k**: premiuje umieszczenie pierwszego trafnego passage’a jak najwyżej (1/rank), ucięte do $k$.
+    - **nDCG@k**: metryka wrażliwa na pozycję; premiuje trafne passage’y blisko góry listy; normalizowana per pytanie.
 
-These are computed at the selected $k$ and then averaged over labeled questions, exactly as implemented in `src/eval/retrieval_eval.py`.
+    Wszystkie są liczone dla wybranego $k$, a potem uśredniane po pytaniach z etykietami.
 """
         )
 
-    st.subheader("Best method (by hits_at_k)")
+    st.subheader("Najlepsza metoda (wg hits_at_k)")
     comparable = df.dropna(subset=["hits_at_k", "k"]).copy()
     if comparable.empty:
-        st.info("Cannot select best: missing hits_at_k or k.")
+        st.info("Nie da się wybrać najlepszej: brakuje hits_at_k albo k.")
         return
 
     comparable["hits_at_k"] = pd.to_numeric(comparable["hits_at_k"], errors="coerce")
@@ -255,35 +251,28 @@ These are computed at the selected $k$ and then averaged over labeled questions,
     best = pd.DataFrame(best_rows)
     st.dataframe(best[["k", "method", "hits_at_k"]], width="stretch")
 
-    st.subheader("Trade-offs visible in logs")
+    st.subheader("Kompromisy widoczne w logach")
     st.markdown(
         """
-- **Lexical baselines** have fewer runtime knobs in logs (e.g., BM25 has `bm25_k1`, `bm25_b`).
-- **Hybrid runs** introduce a 2-stage pipeline with additional parameters:
-  - Stage 1 size: `top_k_candidates`
-  - Reranking size: `rerank_k`
-  - Bi-encoder execution: `biencoder_device`, `biencoder_batch_size`, `biencoder_max_length`
+- **Bazowe metody leksykalne** mają mniej „gałek” w logach (np. BM25 ma `bm25_k1`, `bm25_b`).
+- **Uruchomienia hybrydowe** wprowadzają pipeline 2‑etapowy z dodatkowymi parametrami:
+    - Rozmiar etapu 1: `top_k_candidates`
+    - Rozmiar rerankingu: `rerank_k`
+    - Wykonanie bi-encodera: `biencoder_device`, `biencoder_batch_size`, `biencoder_max_length`
 
-This page reports only what is directly present in `metrics.csv`.
-
-Repo note on observed behavior (current cached runs):
-- The `results/README.md` discusses a concrete pattern seen in these runs: hybrid reranking can improve
-    `hits_at_k` while not necessarily improving rank-sensitive metrics (`mrr_at_k`, `ndcg_at_k`).
-
-Sources (repo docs):
-- `results/README.md`
+Ta strona pokazuje tylko to, co jest bezpośrednio zapisane w `metrics.csv`.
 """
     )
 
-    st.subheader("Honorable mention: caching makes this manageable")
+    st.subheader("Uwaga: cache robi tu robotę")
     st.markdown(
         """
-This repo relies heavily on caching so experiments are actually runnable:
+Ta prezentacja opiera się na cache, dzięki czemu eksperymenty da się uruchamiać w praktyce:
 
-- Passage-side lexical artifacts are cached under `.cache/preprocessed_data/...` (see `src/preprocess/README.md`).
-- Evaluation outputs are cached under `.cache/submissions/.../metrics.csv`, which is what this app reads.
+- Artefakty leksykalne dla passage’ów są cache’owane w `.cache/preprocessed_data/...`.
+- Wyniki ewaluacji są cache’owane w `.cache/submissions/.../metrics.csv` — i to właśnie czyta ta aplikacja.
 
-Without caching, both “vectorize millions of passages” and “run many experiment variants” would be too slow to iterate on.
+Bez cache zarówno „wektoryzacja milionów passage’ów”, jak i „wiele wariantów eksperymentów” byłyby zbyt wolne.
 """
     )
 

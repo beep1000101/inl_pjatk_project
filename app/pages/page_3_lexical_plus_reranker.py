@@ -87,43 +87,36 @@ def _wiki_trivia_only(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def page() -> None:
-    st.title("Lexical + Semantic Re-ranking (Hybrid)")
-    st.caption("Primary metric: ndcg_at_k (from metrics.csv)")
+    st.title("Reranking leksykalny + semantyczny (hybryda)")
+    st.caption("Główna metryka: ndcg_at_k (z metrics.csv)")
 
     st.markdown(
         """
-### Why a 2-stage hybrid pipeline (repo rationale)
+### Dlaczego pipeline hybrydowy jest 2‑etapowy
 
-The repository’s hybrid systems are designed around a practical constraint: the `wiki-trivia` corpus has
-millions of passages, so you cannot afford to run a semantic model over the full corpus per query.
+To podejście wynika z praktycznego ograniczenia: korpus `wiki-trivia` ma miliony passage’y,
+więc nie da się uruchamiać modelu semantycznego na całym korpusie dla każdego zapytania.
 
-Instead, the repo uses:
+Stosuje się więc:
 
-1) **Stage 1: lexical candidate generation** (BM25 or TF‑IDF) to retrieve a manageable shortlist
-2) **Stage 2: semantic reranking** (bi-encoder) over only those candidates
+1) **Etap 1: generowanie kandydatów leksykalnie** (BM25 albo TF‑IDF), żeby dostać krótką listę
+2) **Etap 2: reranking semantyczny** (bi-encoder) tylko wśród tych kandydatów
 
-This matches how the repo describes preprocessing/evaluation:
-- caching is required to make experiments feasible,
-- reranking is only meaningful if the relevant passage is present in the candidate set.
-
-Sources (repo docs):
-- `src/preprocess/README.md`
-- `src/eval/README.md`
-- `src/calibration/README.md`
+Reranking ma sens tylko wtedy, gdy trafny passage w ogóle znajdzie się w zbiorze kandydatów.
 """
     )
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
         return
 
     hybrid = df[df["method"].isin(["hybrid_bm25_biencoder", "hybrid_tfidf_biencoder"])].copy()
     if hybrid.empty:
-        st.error("No hybrid runs found (hybrid_*_biencoder).")
+        st.error("Nie znaleziono uruchomień hybrydowych (hybrid_*_biencoder).")
         return
 
-    st.subheader("Runs (wiki-trivia)")
+    st.subheader("Uruchomienia (wiki-trivia)")
     show_cols = [
         "run_id",
         "method",
@@ -151,32 +144,26 @@ Sources (repo docs):
     ]
     st.dataframe(hybrid[show_cols], width="stretch")
 
-    st.subheader("Pipeline parameters")
+    st.subheader("Parametry pipeline")
     st.markdown(
         """
-This repository implements a 2-stage hybrid pipeline:
+Pipeline hybrydowy ma 2 etapy:
 
-- Stage 1 (lexical): retrieve `top_k_candidates` passages.
-- Stage 2 (semantic): rerank the top `rerank_k` candidates with a bi-encoder.
+- Etap 1 (leksykalny): pobierz `top_k_candidates` passage’y.
+- Etap 2 (semantyczny): przestaw kolejność top `rerank_k` kandydatów bi-encoderem.
 
-The logged fields above also capture runtime-related knobs:
-- `chunk_size` for corpus processing
-- bi-encoder batching: `biencoder_batch_size`, `biencoder_max_length`
-- execution device: `biencoder_device`
+Pola w logach zawierają też „gałki” wpływające na czas działania:
+- `chunk_size` dla przetwarzania korpusu
+- batchowanie bi-encodera: `biencoder_batch_size`, `biencoder_max_length`
+- urządzenie wykonania: `biencoder_device`
 
-Note on `alpha`:
-- In the currently cached hybrid runs, `alpha` is empty in `metrics.csv`. The repo’s `results/README.md`
-    documents this as `alpha=None`, meaning ranking is driven by the bi-encoder score and lexical score acts
-    as a tie-breaker.
-
-Sources (repo docs):
-- `results/README.md`
-- `results/hybrid/hybrid_bm25_biencoder.md`
-- `results/hybrid/hybrid_tfidf_biencoder.md`
+Uwaga o `alpha`:
+- W dostępnych logach hybrydowych `alpha` jest puste w `metrics.csv`, co odpowiada `alpha=None`.
+  W praktyce ranking jest wtedy napędzany wynikiem bi-encodera, a wynik leksykalny może działać jako tie‑breaker.
 """
     )
 
-    st.subheader("Bi-encoder used (and why)")
+    st.subheader("Użyty bi-encoder (i dlaczego)")
     model_names = sorted(
         {
             str(x)
@@ -186,49 +173,49 @@ Sources (repo docs):
     )
     if model_names:
         if len(model_names) == 1:
-            st.markdown(f"Model in these logged runs: `{model_names[0]}`")
+            st.markdown(f"Model w tych uruchomieniach: `{model_names[0]}`")
         else:
-            st.markdown("Models in these logged runs:")
+            st.markdown("Modele w tych uruchomieniach:")
             st.markdown("\n".join([f"- `{m}`" for m in model_names]))
     else:
-        st.markdown("Model name not present in the cached `metrics.csv` for these runs.")
+        st.markdown("Nazwa modelu nie występuje w cache’owanym `metrics.csv` dla tych uruchomień.")
 
     st.markdown(
         """
-A **bi-encoder** encodes the query and each candidate passage *independently* into the same embedding space.
-Then we score candidates by a simple similarity function (commonly cosine similarity / dot product).
+**Bi-encoder** koduje zapytanie oraz każdy kandydujący passage *niezależnie* do tej samej przestrzeni embeddingów.
+Następnie punktuje kandydatów prostą funkcją podobieństwa (najczęściej cosine similarity / iloczyn skalarny).
 
-Why it’s a good fit here (simple intuition):
-- **Fast enough for reranking**: once lexical retrieval narrows the search to a few hundred candidates,
-  a bi-encoder can score that shortlist efficiently in batches.
-- **More expressive than pure lexical overlap**: it can still match paraphrases/semantic similarity when
-  the exact keywords don’t align.
+Dlaczego to pasuje (intuicyjnie):
+- **Wystarczająco szybki do rerankingu**: gdy etap leksykalny zawęzi listę do kilkuset kandydatów,
+    bi-encoder potrafi efektywnie punktować shortlistę w batchach.
+- **Bardziej ekspresywny niż czysta leksyka**: może łapać parafrazy/podobieństwo semantyczne, nawet gdy
+    słowa kluczowe nie pokrywają się idealnie.
 
-This repo also logs the practical knobs that keep this stage manageable (`biencoder_device`,
+W logach są też parametry, które pomagają kontrolować koszt tego etapu (`biencoder_device`,
 `biencoder_batch_size`, `biencoder_max_length`).
 """
     )
 
-    st.subheader("Toy example: 2-stage hybrid retrieval")
-    st.caption("Dummy passages → lexical top-j → bi-encoder rerank → top-k (indices used for lookup)")
+    st.subheader("Przykład zabawkowy: hybrydowy retrieval 2‑etapowy")
+    st.caption("Przykładowe passage’e → leksykalne top‑j → reranking bi-encoderem → top‑k (indeksy do lookup)")
 
     toy = _load_toy_passages()
     if toy.empty:
-        st.info("Toy passages not found at app/data/toy_passages.csv")
+        st.info("Nie znaleziono przykładowych passage’y w app/data/toy_passages.csv")
         return
 
-    st.markdown("**Dummy passage table (10 rows)**")
+    st.markdown("**Tabela przykładowych passage’y (10 wierszy)**")
     st.dataframe(toy, width="stretch")
 
-    query = st.text_input("Query", value="What is the capital of France?", key="toy_hybrid_query")
+    query = st.text_input("Zapytanie", value="Jaka jest stolica Francji?", key="toy_hybrid_query")
 
     j = 5
     top_k = 3
 
-    st.markdown("↓ Stage 1: lexical retrieval (top-j candidates)")
+    st.markdown("↓ Etap 1: retrieval leksykalny (kandydaci top‑j)")
     st.markdown(
         r"""
-Represent the full corpus of 10 passages with a lexical vector-space matrix:
+Reprezentujemy pełen „korpus” 10 passage’y jako macierz leksykalną:
 
 $$
 M^{(lex)} \in \mathbb{R}^{10\times d_{lex}},\quad
@@ -239,14 +226,14 @@ m^{(lex)}_{9,0} & \cdots & m^{(lex)}_{9,d_{lex}-1}
 \end{bmatrix}
 $$
 
-and the query as a vector:
+i zapytanie jako wektor:
 
 $$
 v^{(lex)} \in \mathbb{R}^{d_{lex}},\quad
 v^{(lex)}=[v^{(lex)}_0,\ldots,v^{(lex)}_{d_{lex}-1}]^\top
 $$
 
-Compute lexical cosine similarities:
+Liczmy leksykalne podobieństwa cosinusowe:
 
 $$
 u^{(lex)} \in \mathbb{R}^{10},\quad
@@ -255,7 +242,7 @@ $$
 
 (where $M^{(lex)}_i$ is the $i$-th row of $M^{(lex)}$).
 
-Select the best $j$ candidates:
+Wybierz najlepszych $j$ kandydatów:
 
 $$
 \mathrm{indices}^{(lex)} = \operatorname{argmax}_{j}(u^{(lex)})
@@ -265,17 +252,17 @@ $$
 
     # Example candidate indices for demonstration.
     cand_indices = [2, 3, 8, 0, 9][:j]
-    st.markdown(f"Example: **indices** (j={j}) = {cand_indices}")
+    st.markdown(f"Przykład: **indeksy** (j={j}) = {cand_indices}")
 
     candidates = toy.iloc[cand_indices].copy()
-    candidates.insert(0, "index", cand_indices)
-    candidates.insert(1, "query", query)
-    st.dataframe(candidates[["index", "query", "passage_id", "text"]], width="stretch")
+    candidates.insert(0, "indeks", cand_indices)
+    candidates.insert(1, "zapytanie", query)
+    st.dataframe(candidates[["indeks", "zapytanie", "passage_id", "text"]], width="stretch")
 
-    st.markdown("↓ Stage 2: bi-encoder reranking (top-k within candidates)")
+    st.markdown("↓ Etap 2: reranking bi-encoderem (top‑k wśród kandydatów)")
     st.markdown(
         r"""
-Now embed only the $j$ candidate passages with a bi-encoder (semantic space):
+Teraz embedujemy tylko $j$ passage’y-kandydatów bi-encoderem (przestrzeń semantyczna):
 
 $$
 M^{(sem)} \in \mathbb{R}^{j\times d_{sem}},\quad
@@ -286,23 +273,23 @@ m^{(sem)}_{j-1,0} & \cdots & m^{(sem)}_{j-1,d_{sem}-1}
 \end{bmatrix}
 $$
 
-and the query as a vector:
+i zapytanie jako wektor:
 
 $$
 v^{(sem)} \in \mathbb{R}^{d_{sem}},\quad
 v^{(sem)}=[v^{(sem)}_0,\ldots,v^{(sem)}_{d_{sem}-1}]^\top
 $$
 
-Compute semantic cosine similarities over candidates:
+Liczmy semantyczne podobieństwa cosinusowe wśród kandydatów:
 
 $$
 u^{(sem)} \in \mathbb{R}^{j},\quad
 u^{(sem)}_r = \cos(M^{(sem)}_r, v^{(sem)}) = \frac{M^{(sem)}_r \cdot v^{(sem)}}{\lVert M^{(sem)}_r \rVert\,\lVert v^{(sem)} \rVert}
 $$
 
-(where $M^{(sem)}_r$ is the $r$-th row of $M^{(sem)}$, i.e., the $r$-th candidate in the stage-1 list).
+(gdzie $M^{(sem)}_r$ to $r$-ty wiersz $M^{(sem)}$, czyli $r$-ty kandydat z listy etapu 1).
 
-Pick the best $k$ candidate rows and map them back to original passage indices:
+Wybierz najlepszych $k$ kandydatów i zmapuj ich z powrotem na indeksy oryginalnych passage’y:
 
 $$
 \mathrm{indices}^{(sem)} = \operatorname{argmax}_{k}(u^{(sem)}),\quad
@@ -314,12 +301,12 @@ $$
     # Example rerank rows within the candidate list.
     rerank_rows = [0, 2, 1][:top_k]
     topk_indices = [cand_indices[r] for r in rerank_rows]
-    st.markdown(f"Example: **indices** (k={top_k}) = {topk_indices}")
+    st.markdown(f"Przykład: **indeksy** (k={top_k}) = {topk_indices}")
 
     topk = toy.iloc[topk_indices].copy()
-    topk.insert(0, "index", topk_indices)
-    topk.insert(1, "query", query)
-    st.dataframe(topk[["index", "query", "passage_id", "text"]], width="stretch")
+    topk.insert(0, "indeks", topk_indices)
+    topk.insert(1, "zapytanie", query)
+    st.dataframe(topk[["indeks", "zapytanie", "passage_id", "text"]], width="stretch")
 
 
 page()

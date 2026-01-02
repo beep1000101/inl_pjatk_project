@@ -108,37 +108,29 @@ def _load_calibration_hits_points() -> pd.DataFrame:
 
 
 def page() -> None:
-    st.title("Lexical Baselines")
-    st.caption("Primary metric: ndcg_at_k (from metrics.csv)")
+    st.title("Bazy leksykalne")
+    st.caption("Główna metryka: ndcg_at_k (z metrics.csv)")
 
     st.markdown(
         """
-### Why lexical baselines come first (repo rationale)
+### Dlaczego zaczynamy od baz leksykalnych
 
-This repository treats TF‑IDF and BM25 as the foundational baselines because:
+TF‑IDF i BM25 to solidne „baseline’y” na start, bo:
 
-- They are **training-free** and therefore robust in **zero-shot** / cross-domain settings.
-- They scale to a multi-million passage corpus once passage representations are **cached**.
-
-This is explicitly part of the project’s design: separate the pipeline into stages, cache expensive artifacts,
-and keep evaluation reproducible.
-
-Sources (repo docs):
-- `src/README.md`
-- `src/preprocess/README.md`
-- `src/eval/README.md`
+- Nie wymagają treningu (**training‑free**) i łatwo je odtwarzać.
+- Dobrze skalują się do dużych korpusów, gdy reprezentacje passage’y są **cache’owane**.
 """
     )
 
-    st.subheader("How lexical spaces are created")
+    st.subheader("Jak powstaje przestrzeń leksykalna")
     st.markdown(
         r"""
-This project precomputes lexical artifacts once and caches them under
+Artefakty leksykalne są liczone raz i cache’owane w
 `.cache/preprocessed_data/<method>/<subdataset>/...`.
-That makes evaluation fast (no re-vectorizing millions of passages each run) and keeps a stable
-row ordering so “top indices → lookup” is reproducible.
+To przyspiesza ewaluację (bez ponownej wektoryzacji milionów passage’y) i utrzymuje stabilne
+indeksowanie wierszy, dzięki czemu „top indeksy → lookup” jest powtarzalne.
 
-Common passage preprocessing (both TF‑IDF and BM25, from `src/preprocess/*`):
+Wspólne przetwarzanie passage’y (TF‑IDF i BM25):
 - Drop redirect-like entries where `text` starts with `REDIRECT` or `PATRZ`.
 - Build the text used for vectorization as `title + " " + text`.
 """
@@ -148,26 +140,26 @@ Common passage preprocessing (both TF‑IDF and BM25, from `src/preprocess/*`):
     r"""
 #### TF‑IDF (used by `tfidf_cosine`)
 
-Implementation (see `src/preprocess/tf_idf_vectors.py`):
+Implementacja:
 - Uses `sklearn.feature_extraction.text.TfidfVectorizer` (defaults: `min_df=5`, `max_df=0.9`,
     `max_features=500_000`, `dtype=float32`).
 - Fits on the passage corpus and produces a sparse TF‑IDF matrix $M \in \mathbb{R}^{N\times d}$.
 
-How it works (in words):
-- **TF** (term frequency) captures “does this passage talk about this word a lot?”.
-- **IDF** (inverse document frequency) downweights words that appear everywhere (like stop-ish words)
-    and upweights words that are rarer and therefore more discriminative.
-- The result is a vector space where a query and passage are “close” if they share informative words.
+Jak to działa (intuicyjnie):
+- **TF** (term frequency) odpowiada na pytanie „czy ten passage często używa danego słowa?”.
+- **IDF** (inverse document frequency) obniża wagę słów częstych „wszędzie” (stop‑word-ish)
+    i podbija wagę słów rzadszych, czyli bardziej rozróżniających.
+- Wynikiem jest przestrzeń wektorowa, gdzie zapytanie i passage są „blisko”, jeśli dzielą informatywne słowa.
 
-Why it works for this project:
-- PolEval questions often have strong lexical cues (names, entities, key phrases).
-- TF‑IDF is training-free, quick to compute once cached, and a strong baseline for cross-domain retrieval.
+Dlaczego to działa w tym zadaniu:
+- Pytania często zawierają mocne sygnały leksykalne (nazwy, encje, kluczowe frazy).
+- TF‑IDF jest training‑free, szybkie po zbudowaniu cache i daje dobry punkt odniesienia.
 
-Cached artifacts:
-- `vectorizer.joblib` (fitted vectorizer)
-- `passages_tfidf.npz` (sparse matrix)
-- `passage_ids.npy` (row index → passage id)
-- `meta.json` (parameters + shapes)
+Artefakty w cache:
+- `vectorizer.joblib` (wytrenowany vectorizer)
+- `passages_tfidf.npz` (macierz rzadka)
+- `passage_ids.npy` (indeks wiersza → passage_id)
+- `meta.json` (parametry + rozmiary)
 """
     )
 
@@ -175,43 +167,38 @@ Cached artifacts:
     r"""
 #### BM25 (used by `bm25_okapi`)
 
-Implementation (see `src/preprocess/bm25_vectors.py`):
+Implementacja:
 - Builds a sparse **term-frequency** matrix using `sklearn.feature_extraction.text.CountVectorizer`
     with `token_pattern=r"(?u)\b\w+\b"`, `lowercase=True`, `dtype=int32`.
 - Computes document lengths `doc_len` and an Okapi-style idf vector (saved to disk).
 
-How it works (in words):
-- BM25 is like TF‑IDF, but with two important tweaks:
-    - **Saturation**: repeating a word many times helps, but with diminishing returns.
-    - **Length normalization**: very long passages shouldn’t win just because they contain more words.
+Jak to działa (intuicyjnie):
+- BM25 jest podobne do TF‑IDF, ale ma dwa ważne usprawnienia:
+    - **Saturacja**: powtarzanie słowa pomaga, ale z malejącymi korzyściami.
+    - **Normalizacja długości**: bardzo długie passage’e nie powinny wygrywać tylko dlatego, że mają więcej słów.
 
-Why it works for this project:
-- Wikipedia-like passages vary a lot in length; BM25’s normalization is a good fit.
-- It’s still purely lexical (fast, training-free), so it’s a reliable first-stage retriever to generate
-    candidates for rerankers.
+Dlaczego to działa w tym zadaniu:
+- Passage’e Wikipedii mocno różnią się długością; normalizacja BM25 dobrze do tego pasuje.
+- To nadal metoda czysto leksykalna (szybka, training‑free), więc dobrze nadaje się jako etap 1 do generowania
+    kandydatów dla rerankerów.
 
-Cached artifacts:
+Artefakty w cache:
 - `vectorizer.joblib`, `passages_tf.npz`, `passage_ids.npy`
 - `doc_len.npy`, `idf.npy`, `meta.json`
-
-Sources (repo docs/code):
-- `src/preprocess/README.md`
-- `src/preprocess/tf_idf_vectors.py`
-- `src/preprocess/bm25_vectors.py`
 """
     )
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
         return
 
     lexical = df[df["method"].isin(["tfidf_cosine", "bm25_okapi"])].copy()
     if lexical.empty:
-        st.error("No lexical baseline runs found (tfidf_cosine / bm25_okapi).")
+        st.error("Nie znaleziono uruchomień baz leksykalnych (tfidf_cosine / bm25_okapi).")
         return
 
-    st.subheader("Runs (wiki-trivia)")
+    st.subheader("Uruchomienia (wiki-trivia)")
     show_cols = [
         "run_id",
         "method",
@@ -234,23 +221,23 @@ Sources (repo docs/code):
     ]
     st.dataframe(lexical[show_cols], width="stretch")
 
-    st.subheader("Toy example: lexical retrieval in vector space")
-    st.caption("A minimal walkthrough: passages → (made-up) matrix M → query vector v → cosine similarity → top indices → lookup")
+    st.subheader("Przykład zabawkowy: retrieval leksykalny w przestrzeni wektorowej")
+    st.caption("Minimalny przebieg: passage’e → (wymyślona) macierz M → wektor zapytania v → podobieństwo cosinusowe → top indeksy → lookup")
 
     toy = _load_toy_passages()
     if toy.empty:
-        st.info("Toy passages not found at app/data/toy_passages.csv")
+        st.info("Nie znaleziono przykładowych passage’y w app/data/toy_passages.csv")
     else:
-        st.markdown("**Dummy passage table (10 rows)**")
+        st.markdown("**Tabela przykładowych passage’y (10 wierszy)**")
         st.dataframe(toy, width="stretch")
 
-        query = st.text_input("Query", value="What is the capital of France?")
+        query = st.text_input("Zapytanie", value="Jaka jest stolica Francji?")
 
-        st.markdown("↓ Cast passages to vector space")
+        st.markdown("↓ Rzutuj passage’e do przestrzeni wektorowej")
 
         st.markdown(
             r"""
-We represent the 10 passages as a matrix in some vector space:
+Reprezentujemy 10 passage’y jako macierz w pewnej przestrzeni wektorowej:
 
 $$
 M \in \mathbb{R}^{10\times d},\quad
@@ -261,7 +248,7 @@ m_{9,0} & \cdots & m_{9,d-1}
 \end{bmatrix}
 $$
 
-and the query as a vector:
+i zapytanie jako wektor:
 
 $$
 v \in \mathbb{R}^{d},\quad
@@ -270,24 +257,24 @@ $$
 """
         )
 
-        st.markdown("↓ Compute cosine similarity")
+        st.markdown("↓ Policz podobieństwo cosinusowe")
         st.markdown(
             r"""
-Compute a score vector $u$ by taking cosine similarity between each row $M_i$ and the query vector $v$:
+Wyznaczamy wektor wyników $u$ licząc podobieństwo cosinusowe między każdym wierszem $M_i$ a wektorem zapytania $v$:
 
 $$
 u \in \mathbb{R}^{10},\quad
 u_i = \cos(M_i, v) = \frac{M_i \cdot v}{\lVert M_i \rVert\,\lVert v \rVert}
 $$
 
-(where $M_i$ is the $i$-th row of $M$).
+(gdzie $M_i$ to $i$-ty wiersz macierzy $M$).
 """
         )
 
-        st.markdown("↓ Pick best k indices")
+        st.markdown("↓ Wybierz najlepsze k indeksów")
         st.markdown(
             r"""
-Pick the indices of the best $k$ scores:
+Wybierz indeksy najlepszych $k$ wyników:
 
 $$
 \mathrm{indices} = \operatorname{argmax}_k(u)
@@ -295,24 +282,24 @@ $$
 """
         )
 
-        st.markdown("↓ Use these indices for lookup")
+        st.markdown("↓ Użyj tych indeksów do lookup")
         top_k = 5
         # Example indices for demonstration (derived from u in a real system).
         indices = [2, 3, 8, 0, 9][:top_k]
-        st.markdown(f"Example: **indices** = {indices}")
+        st.markdown(f"Przykład: **indeksy** = {indices}")
 
         lookup = toy.iloc[indices].copy()
-        lookup.insert(0, "index", indices)
-        lookup.insert(1, "query", query)
-        st.dataframe(lookup[["index", "query", "passage_id", "text"]], width="stretch")
+        lookup.insert(0, "indeks", indices)
+        lookup.insert(1, "zapytanie", query)
+        st.dataframe(lookup[["indeks", "zapytanie", "passage_id", "text"]], width="stretch")
 
-    st.subheader("Calibration: Hits@k vs k (wiki-trivia)")
-    st.caption("Field: hits_at_k. Source: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
+    st.subheader("Kalibracja: Hits@k vs k (wiki-trivia)")
+    st.caption("Pole: hits_at_k. Źródło: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
 
     cal = _load_calibration_hits_points()
     if cal.empty:
         st.info(
-            "No calibration file found at .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv"
+            "Nie znaleziono pliku kalibracji: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv"
         )
     else:
         cal = cal[cal["method"].isin(["bm25", "tfidf"])].copy()
@@ -341,7 +328,7 @@ $$
             "k_fraction_of_max": "k_fraction_of_max",
         }
         selected_metric_label = st.selectbox(
-            "Metric (y-axis)",
+            "Metryka (oś Y)",
             options=list(metric_label_to_col.keys()),
             index=0,
         )
@@ -358,7 +345,7 @@ $$
                 y=alt.Y(f"{metric_col}:Q", title=selected_metric_label),
                 color=alt.Color(
                     "method:N",
-                    title="method",
+                    title="metoda",
                     # User-requested palette: orange + white
                     scale=alt.Scale(domain=["bm25", "tfidf"], range=["#FF7F0E", "#FFFFFF"]),
                 ),
@@ -387,60 +374,55 @@ $$
         )
         st.altair_chart(chart, width="stretch")
 
-        with st.expander("What do these calibration metrics mean?"):
+        with st.expander("Co oznaczają te metryki kalibracji?"):
             if hasattr(st, "page_link"):
                 st.page_link(
-                    "pages/page_1_problem_summary.py",
-                    label="Open: Problem summary (metric formulas)",
+                    "pages/01_podsumowanie_problemu.py",
+                    label="Otwórz: Podsumowanie problemu (wzory metryk)",
                 )
             else:
-                st.markdown("See the **Problem summary** page for full metric formulas.")
+                st.markdown("Pełne wzory metryk są na stronie **Podsumowanie problemu**.")
 
             st.markdown(
                 """
-This calibration file contains a **Hits@k curve** (per method) and we plot a selected metric against $k$:
+Ten plik kalibracji zawiera **krzywą Hits@k** (dla każdej metody) i rysujemy wybraną metrykę względem $k$:
 
-- **hits_at_k**: same as Hits@k from the Problem Summary page, evaluated for varying $k$.
-- **hits_norm_to_max_k**: $\mathrm{Hits@k} / \max_{k'} \mathrm{Hits@k'}$ within the same method (normalizes to 1.0 at the best observed $k$).
-- **hits_per_k**: $\mathrm{Hits@k} / k$ (a simple “hits per retrieved doc” proxy).
-- **marginal_hits_gain**: change in Hits@k between two consecutive sampled $k$ points.
-- **marginal_hits_per_doc**: $\Delta\mathrm{Hits@k} / \Delta k$ between sampled points (slope of the curve).
-- **k_fraction_of_max**: $k / \mathrm{max\_k}$ (how far along the calibration range you are).
+- **hits_at_k**: to samo Hits@k co w Podsumowaniu problemu, policzone dla różnych $k$.
+- **hits_norm_to_max_k**: $\mathrm{Hits@k} / \max_{k'} \mathrm{Hits@k'}$ w obrębie metody (normalizacja do 1.0 dla najlepszego $k$).
+- **hits_per_k**: $\mathrm{Hits@k} / k$ (prosty wskaźnik „trafień na pobrany dokument”).
+- **marginal_hits_gain**: zmiana Hits@k między dwoma kolejnymi punktami $k$.
+- **marginal_hits_per_doc**: $\Delta\mathrm{Hits@k} / \Delta k$ między punktami (nachylenie krzywej).
+- **k_fraction_of_max**: $k / \mathrm{max\_k}$ (jak daleko jesteś w zakresie kalibracji).
 
-All derived metrics are computed **only from this calibration CSV**; the only “true” IR metric logged here is Hits@k.
+Wszystkie metryki pochodne są liczone **wyłącznie z tego CSV**; jedyną „prawdziwą” metryką IR w tym pliku jest Hits@k.
 """
             )
 
-        with st.expander("Show calibration table"):
+        with st.expander("Pokaż tabelę kalibracji"):
             # Only show columns that are in the allow-list.
             cal_show = [c for c in ["method", "k", "hits_at_k"] if c in cal.columns]
             st.dataframe(cal[cal_show], width="stretch")
 
         st.markdown(
             """
-Why this calibration exists (repo rationale):
+Po co jest ta kalibracja:
 
-- The project uses calibration to make a data-driven choice of *how large* a retrieval prefix/candidate set
-  needs to be before improvements taper off.
-- This is framed as an engineering trade-off: larger $k$ improves Hits@k up to a point, but increases runtime
-  and memory usage (especially for reranking pipelines).
-
-Source (repo docs):
-- `src/calibration/README.md`
+- Pomaga dobrać, jak duże $k$ jest potrzebne, zanim zyski zaczną się wypłaszczać.
+- To kompromis inżynierski: większe $k$ może poprawiać Hits@k, ale zwiększa czas i zużycie pamięci (szczególnie przy rerankingu).
 """
         )
 
-    st.subheader("Best lexical baseline (by hits_at_k)")
+    st.subheader("Najlepsza baza leksykalna (wg hits_at_k)")
     comparable = lexical.dropna(subset=["hits_at_k", "k"]).copy()
     if comparable.empty:
-        st.info("Cannot determine best run: hits_at_k missing.")
+        st.info("Nie da się wybrać najlepszego uruchomienia: brakuje hits_at_k.")
         return
 
     # Ensure numeric compare
     comparable["hits_at_k"] = pd.to_numeric(comparable["hits_at_k"], errors="coerce")
     comparable["k"] = pd.to_numeric(comparable["k"], errors="coerce")
 
-    # The repo logs show k=10 for both; keep grouping to avoid mismatched k comparisons.
+    # Logi zwykle mają k=10 dla obu metod; grupowanie po k zapobiega nieporównywalnym zestawieniom.
     best_rows: list[pd.Series] = []
     for k_val, group in comparable.groupby("k", dropna=False):
         group = group.dropna(subset=["hits_at_k"])
@@ -449,7 +431,7 @@ Source (repo docs):
         best_rows.append(group.sort_values("hits_at_k", ascending=False).iloc[0])
 
     if not best_rows:
-        st.info("No comparable groups found to select a best run.")
+        st.info("Brak porównywalnych grup do wyboru najlepszego uruchomienia.")
         return
 
     best = pd.DataFrame(best_rows)

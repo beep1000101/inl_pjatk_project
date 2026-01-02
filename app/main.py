@@ -1,43 +1,35 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import streamlit as st
-
-
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="PolEval 2022 Passage Retrieval — wiki-trivia",
+        page_title="PolEval 2022 — wyszukiwanie fragmentów (wiki-trivia)",
         layout="wide",
     )
 
-    st.title("PolEval 2022 Task 3: Passage Retrieval — wiki-trivia")
+    st.title("PolEval 2022 Zadanie 3: Wyszukiwanie fragmentów — wiki-trivia")
 
     st.markdown(
         """
-This Streamlit app presents the existing experiment results in this repository, scoped strictly to:
+Ta aplikacja Streamlit prezentuje wyniki eksperymentów (z wcześniej uruchomionych przebiegów), w zakresie:
 
 - `dataset_id = piotr-rybak__poleval2022-passage-retrieval-dataset`
 - `subdataset = wiki-trivia`
 
-Use the pages in the left sidebar to navigate:
+Do nawigacji użyj stron w lewym panelu:
 
-- Problem summary
-- Lexical baselines (TF‑IDF, BM25)
-- Lexical + semantic re-ranking (hybrid)
-- Final summary
+- Podsumowanie problemu
+- Bazy leksykalne (TF‑IDF, BM25)
+- Reranking leksykalny + semantyczny (hybryda)
+- Podsumowanie końcowe
 
-Notes:
-- All numeric values shown in this app are loaded from `.cache/submissions/**/metrics.csv`.
-- The app does not use `legal-questions` or `allegro-faq`.
+Uwagi:
+- Wszystkie wartości liczbowe w aplikacji są wczytywane z zapisanych metryk (np. `.cache/submissions/**/metrics.csv`).
+- Prezentacja dotyczy wyłącznie `wiki-trivia`.
 """
     )
-
-    st.caption(f"Project root: {_project_root()}")
 
 
 if __name__ == "__main__":
