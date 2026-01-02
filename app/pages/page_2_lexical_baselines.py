@@ -77,9 +77,47 @@ def _wiki_trivia_only(df: pd.DataFrame) -> pd.DataFrame:
     ].copy()
 
 
+@st.cache_data(show_spinner=False)
+def _load_calibration_hits_points() -> pd.DataFrame:
+    root = _project_root()
+    path = (
+        root
+        / ".cache"
+        / "calibration"
+        / "wiki-trivia"
+        / "test"
+        / "hits_points_maxk200_log_p20.csv"
+    )
+    if not path.exists():
+        return pd.DataFrame()
+
+    df = pd.read_csv(path)
+    df["_calibration_path"] = str(path)
+    return df
+
+
 def page() -> None:
     st.title("Lexical Baselines")
     st.caption("Primary metric: ndcg_at_k (from metrics.csv)")
+
+    st.markdown(
+        """
+### Why lexical baselines come first (repo rationale)
+
+This repository treats TF‑IDF and BM25 as the foundational baselines because:
+
+- They are **training-free** and therefore robust in **zero-shot** / cross-domain settings.
+- They scale to a multi-million passage corpus once passage representations are **cached**.
+
+This is explicitly part of the project’s design: separate the pipeline into stages, cache expensive artifacts,
+and keep evaluation reproducible.
+
+Sources (repo docs):
+- `src/README.md`
+- `src/preprocess/README.md`
+- `src/eval/README.md`
+"""
+    )
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
@@ -95,6 +133,10 @@ def page() -> None:
     show_cols = [
         "run_id",
         "method",
+        "dataset_id",
+        "subdataset",
+        "questions_split",
+        "pairs_split",
         "k",
         "n_questions",
         "n_labeled",
@@ -105,12 +147,45 @@ def page() -> None:
         "hits_at_k",
         "bm25_k1",
         "bm25_b",
-        "out_tsv",
         "submission_only",
         "chunk_size",
-        "_metrics_path",
     ]
-    st.dataframe(lexical[show_cols], use_container_width=True)
+    st.dataframe(lexical[show_cols], width="stretch")
+
+    st.subheader("Calibration: Hits@k vs k (wiki-trivia)")
+    st.caption("Field: hits_at_k. Source: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
+
+    cal = _load_calibration_hits_points()
+    if cal.empty:
+        st.info(
+            "No calibration file found at .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv"
+        )
+    else:
+        cal = cal[cal["method"].isin(["bm25", "tfidf"])].copy()
+        cal["k"] = pd.to_numeric(cal["k"], errors="coerce")
+        cal["hits_at_k"] = pd.to_numeric(cal["hits_at_k"], errors="coerce")
+        cal = cal.dropna(subset=["k", "hits_at_k"]).sort_values(["method", "k"])
+
+        pivot = cal.pivot_table(index="k", columns="method", values="hits_at_k", aggfunc="mean")
+        st.line_chart(pivot)
+
+        with st.expander("Show calibration table"):
+            cal_show = [c for c in cal.columns if c != "_calibration_path"]
+            st.dataframe(cal[cal_show], width="stretch")
+
+        st.markdown(
+            """
+Why this calibration exists (repo rationale):
+
+- The project uses calibration to make a data-driven choice of *how large* a retrieval prefix/candidate set
+  needs to be before improvements taper off.
+- This is framed as an engineering trade-off: larger $k$ improves Hits@k up to a point, but increases runtime
+  and memory usage (especially for reranking pipelines).
+
+Source (repo docs):
+- `src/calibration/README.md`
+"""
+        )
 
     st.subheader("Best lexical baseline (by ndcg_at_k)")
     comparable = lexical.dropna(subset=["ndcg_at_k", "k"]).copy()
@@ -135,16 +210,7 @@ def page() -> None:
         return
 
     best = pd.DataFrame(best_rows)
-    st.dataframe(best[["method", "k", "ndcg_at_k", "_metrics_path"]], use_container_width=True)
-
-    st.markdown(
-        """
-### Calibration / tuning
-
-- The repo contains a calibration module (`src/calibration/`), but the currently logged lexical runs in `.cache/submissions/` appear as single rows per method.
-- If additional `metrics.csv` rows exist with different `bm25_k1` / `bm25_b` / `k`, they will appear automatically in the table above.
-"""
-    )
+    st.dataframe(best[["method", "k", "ndcg_at_k"]], width="stretch")
 
 
 page()

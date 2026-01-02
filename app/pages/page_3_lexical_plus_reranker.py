@@ -81,6 +81,29 @@ def page() -> None:
     st.title("Lexical + Semantic Re-ranking (Hybrid)")
     st.caption("Primary metric: ndcg_at_k (from metrics.csv)")
 
+    st.markdown(
+        """
+### Why a 2-stage hybrid pipeline (repo rationale)
+
+The repository’s hybrid systems are designed around a practical constraint: the `wiki-trivia` corpus has
+millions of passages, so you cannot afford to run a semantic model over the full corpus per query.
+
+Instead, the repo uses:
+
+1) **Stage 1: lexical candidate generation** (BM25 or TF‑IDF) to retrieve a manageable shortlist
+2) **Stage 2: semantic reranking** (bi-encoder) over only those candidates
+
+This matches how the repo describes preprocessing/evaluation:
+- caching is required to make experiments feasible,
+- reranking is only meaningful if the relevant passage is present in the candidate set.
+
+Sources (repo docs):
+- `src/preprocess/README.md`
+- `src/eval/README.md`
+- `src/calibration/README.md`
+"""
+    )
+
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
         st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
@@ -95,6 +118,10 @@ def page() -> None:
     show_cols = [
         "run_id",
         "method",
+        "dataset_id",
+        "subdataset",
+        "questions_split",
+        "pairs_split",
         "k",
         "ndcg_at_k",
         "recall_at_k",
@@ -111,11 +138,9 @@ def page() -> None:
         "biencoder_device",
         "biencoder_batch_size",
         "biencoder_max_length",
-        "out_tsv",
         "submission_only",
-        "_metrics_path",
     ]
-    st.dataframe(hybrid[show_cols], use_container_width=True)
+    st.dataframe(hybrid[show_cols], width="stretch")
 
     st.subheader("Pipeline parameters")
     st.markdown(
@@ -129,6 +154,16 @@ The logged fields above also capture runtime-related knobs:
 - `chunk_size` for corpus processing
 - bi-encoder batching: `biencoder_batch_size`, `biencoder_max_length`
 - execution device: `biencoder_device`
+
+Note on `alpha`:
+- In the currently cached hybrid runs, `alpha` is empty in `metrics.csv`. The repo’s `results/README.md`
+    documents this as `alpha=None`, meaning ranking is driven by the bi-encoder score and lexical score acts
+    as a tie-breaker.
+
+Sources (repo docs):
+- `results/README.md`
+- `results/hybrid/hybrid_bm25_biencoder.md`
+- `results/hybrid/hybrid_tfidf_biencoder.md`
 """
     )
 

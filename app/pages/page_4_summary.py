@@ -81,6 +81,20 @@ def page() -> None:
     st.title("Final Summary")
     st.caption("Best method is selected by ndcg_at_k, within comparable runs.")
 
+    st.markdown(
+        """
+### How to read this summary (repo rationale)
+
+- The repository treats **nDCG@10** as the primary decision metric for PolEval passage retrieval.
+- Supporting metrics (Hits/Recall/Precision/MRR) are logged to help diagnose whether improvements come from
+  “more hits anywhere in top‑10” vs “better ordering at the top”.
+
+Sources (repo docs):
+- `src/eval/README.md`
+- `results/README.md`
+"""
+    )
+
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
         st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
@@ -103,6 +117,10 @@ def page() -> None:
     st.subheader("Comparable runs (wiki-trivia)")
     show_cols = [
         "method",
+        "dataset_id",
+        "subdataset",
+        "questions_split",
+        "pairs_split",
         "k",
         "ndcg_at_k",
         "recall_at_k",
@@ -113,9 +131,11 @@ def page() -> None:
         "rerank_k",
         "biencoder_device",
         "biencoder_batch_size",
-        "_metrics_path",
     ]
-    st.dataframe(df[show_cols].sort_values(["k", "ndcg_at_k"], ascending=[True, False]), use_container_width=True)
+    st.dataframe(
+        df[show_cols].sort_values(["k", "ndcg_at_k"], ascending=[True, False]),
+        width="stretch",
+    )
 
     st.subheader("Best method (by ndcg_at_k)")
     comparable = df.dropna(subset=["ndcg_at_k", "k"]).copy()
@@ -131,7 +151,7 @@ def page() -> None:
         best_rows.append(group.sort_values("ndcg_at_k", ascending=False).iloc[0])
 
     best = pd.DataFrame(best_rows)
-    st.dataframe(best[["k", "method", "ndcg_at_k", "_metrics_path"]], use_container_width=True)
+    st.dataframe(best[["k", "method", "ndcg_at_k"]], width="stretch")
 
     st.subheader("Trade-offs visible in logs")
     st.markdown(
@@ -143,6 +163,13 @@ def page() -> None:
   - Bi-encoder execution: `biencoder_device`, `biencoder_batch_size`, `biencoder_max_length`
 
 This page reports only what is directly present in `metrics.csv`.
+
+Repo note on observed behavior (current cached runs):
+- The `results/README.md` discusses a concrete pattern seen in these runs: hybrid reranking can improve
+    `hits_at_k` while not necessarily improving rank-sensitive metrics (`mrr_at_k`, `ndcg_at_k`).
+
+Sources (repo docs):
+- `results/README.md`
 """
     )
 
