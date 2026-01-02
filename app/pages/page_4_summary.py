@@ -158,7 +158,7 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         width="stretch",
     )
 
-    st.subheader("Compare metrics (toggle)")
+    st.subheader("Compare metric")
     metric_options = [
         "hits_at_k",
         "ndcg_at_k",
@@ -166,44 +166,37 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         "recall_at_k",
         "precision_at_k",
     ]
-    selected_metrics = st.multiselect(
-        "Metrics",
+    selected_metric = st.selectbox(
+        "Metric",
         options=metric_options,
-        default=["hits_at_k"],
+        index=0,
     )
     k_values = sorted([k for k in df["k"].dropna().unique().tolist()])
     selected_k = st.selectbox("k", options=k_values) if k_values else None
 
-    if selected_metrics and selected_k is not None:
+    if selected_k is not None:
         plot_df = df[df["k"] == selected_k].copy()
-        for metric in selected_metrics:
-            plot_df[metric] = pd.to_numeric(plot_df[metric], errors="coerce")
+        plot_df[selected_metric] = pd.to_numeric(plot_df[selected_metric], errors="coerce")
+        plot_df = plot_df.dropna(subset=[selected_metric])
 
-        long_df = plot_df[["method", "k"] + selected_metrics].melt(
-            id_vars=["method", "k"],
-            var_name="metric",
-            value_name="value",
-        )
-        long_df = long_df.dropna(subset=["value"])
-
-        metric_toggle = alt.selection_point(fields=["metric"], bind="legend")
         chart = (
-            alt.Chart(long_df)
+            alt.Chart(plot_df)
             .mark_bar()
             .encode(
-                x=alt.X("method:N", title="method", sort=methods),
-                y=alt.Y("value:Q", title="value"),
-                color=alt.Color("metric:N", title="metric", scale=alt.Scale(scheme="tableau10")),
-                xOffset="metric:N",
+                x=alt.X(
+                    "method:N",
+                    title="method",
+                    sort=methods,
+                    axis=alt.Axis(labelAngle=0),
+                ),
+                y=alt.Y(f"{selected_metric}:Q", title=selected_metric),
+                color=alt.value("#FF7F0E"),
                 tooltip=[
                     alt.Tooltip("method:N"),
-                    alt.Tooltip("metric:N"),
                     alt.Tooltip("k:Q"),
-                    alt.Tooltip("value:Q", format=".6f"),
+                    alt.Tooltip(f"{selected_metric}:Q", format=".6f"),
                 ],
             )
-            .add_params(metric_toggle)
-            .transform_filter(metric_toggle)
             .properties(height=320)
             .configure_view(strokeWidth=0)
             .configure_axis(
@@ -220,7 +213,7 @@ more often—even if rank-sensitive metrics don’t always move in the same way.
         )
         st.altair_chart(chart, width="stretch")
     else:
-        st.info("Select at least one metric to plot.")
+        st.info("Select k to plot.")
 
     with st.expander("What do these metrics mean?"):
         # Streamlit multipage link (relative to app/main.py)
