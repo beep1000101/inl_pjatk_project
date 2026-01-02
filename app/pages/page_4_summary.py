@@ -215,7 +215,7 @@ passage — nawet jeśli metryki wrażliwe na pozycję nie zawsze rosną w tym s
         # Streamlit multipage link (relative to app/main.py)
         if hasattr(st, "page_link"):
             st.page_link(
-                "pages/01_podsumowanie_problemu.py",
+                "pages/page_1_problem_summary.py",
                 label="Otwórz: Podsumowanie problemu (wzory metryk)",
             )
         else:

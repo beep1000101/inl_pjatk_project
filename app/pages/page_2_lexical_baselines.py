@@ -377,7 +377,7 @@ $$
         with st.expander("Co oznaczają te metryki kalibracji?"):
             if hasattr(st, "page_link"):
                 st.page_link(
-                    "pages/01_podsumowanie_problemu.py",
+                    "pages/page_1_problem_summary.py",
                     label="Otwórz: Podsumowanie problemu (wzory metryk)",
                 )
             else:
