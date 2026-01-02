@@ -1,7 +1,7 @@
 # BM25 (Okapi)
 
 ## Run metadata
-- Run ID: `20260102T105510Z`
+- Run ID: `20260102T172228Z`
 - Method: `bm25_okapi`
 - Dataset: `piotr-rybak__poleval2022-passage-retrieval-dataset`
 - Subdataset: `wiki-trivia`
@@ -14,11 +14,11 @@
 ## Metrics@10
 | Metric | Value |
 |---|---:|
-| Hits@10 | 0.4849 |
-| Recall@10 | 0.2294 |
+| Hits@10 | 0.4857 |
+| Recall@10 | 0.2295 |
 | Precision@10 | 0.0689 |
-| MRR@10 | 0.2826 |
-| nDCG@10 | 0.1966 |
+| MRR@10 | 0.2827 |
+| nDCG@10 | 0.1967 |
 
 Source of truth: `.cache/submissions/bm25_okapi/metrics.csv`.
 
@@ -29,8 +29,9 @@ Source of truth: `.cache/submissions/bm25_okapi/metrics.csv`.
 ## Configuration (from metrics.csv)
 - `bm25_k1=1.5`, `bm25_b=0.75`
 - Passage matrix cache: `.cache/preprocessed_data/bm25_vectors/wiki-trivia`
-- Vectorizer: `regex(\w+) lower`, `min_df=5`, `max_df=0.9`, `max_features=500000`
-- Chunking during scoring: `chunk_size=20000`
+- Vectorizer: `CountVectorizer(token_pattern=\b\w+\b, lowercase=True)`, `min_df=5`, `max_df=0.9`, `max_features=500000`
+- Corpus size: `n_passages=6639839`, `n_features=500000`, `avgdl=48.74`
+- Chunking during scoring: `chunk_size=10000`
 
 ## Interpretation (verbose)
 BM25 is a classic lexical retrieval method: it scores passages by term overlap, with (1) saturation of term frequency (`k1`) and (2) document-length normalization (`b`). On Wikipedia-like corpora and short, entity-heavy questions (which `wiki-trivia` resembles), exact matching is often a dominant signal, so BM25 tends to be a strong baseline.
