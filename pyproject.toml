@@ -8,15 +8,20 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 
 dependencies = [
+    "joblib>=1.3.0",
+    "numpy>=1.26.0,<2",
     "pandas>=2.3.0",
+    "scipy>=1.11.0",
     "scikit-learn>=1.8.0",
-    "sentence-transformers>=2.6.0",
-    "torch>=2.0.0",
+    "sentence-transformers==2.6.1",
+    "transformers==4.38.2",
+    "torch==2.1.2+cu118",
 ]
 
 [dependency-groups]
 dev = [
     "datasets>=4.4.2",
+    "matplotlib>=3.8.0",
     "pytest>=9.0.2",
     "ruff>=0.9.0",
 ]
@@ -26,3 +31,11 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu118" }
