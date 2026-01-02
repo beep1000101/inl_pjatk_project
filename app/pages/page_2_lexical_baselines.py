@@ -13,6 +13,7 @@ ALLOWED_FIELDS = [
     "subdataset",
     "questions_split",
     "pairs_split",
+    "submission_only",
     "k",
     "n_questions",
     "n_labeled",
@@ -21,8 +22,6 @@ ALLOWED_FIELDS = [
     "precision_at_k",
     "mrr_at_k",
     "ndcg_at_k",
-    "out_tsv",
-    "submission_only",
     "top_k_candidates",
     "chunk_size",
     "rerank_k",
@@ -170,7 +169,8 @@ Sources (repo docs):
         st.line_chart(pivot)
 
         with st.expander("Show calibration table"):
-            cal_show = [c for c in cal.columns if c != "_calibration_path"]
+            # Only show columns that are in the allow-list.
+            cal_show = [c for c in ["method", "k", "hits_at_k"] if c in cal.columns]
             st.dataframe(cal[cal_show], width="stretch")
 
         st.markdown(
