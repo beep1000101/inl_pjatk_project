@@ -109,7 +109,12 @@ def main() -> None:
         )
 
     model = load_fasttext_model(model_path=model_path)
-    reranker = FastTextCosineReranker(model=model, tokenize=tokenize)
+    reranker = FastTextCosineReranker(
+        model=model,
+        tokenize=tokenize,
+        passage_vectors=passage_vectors,
+        passage_ids=ft_passage_ids,
+    )
 
     pairs_split = None if args.submission_only else args.split
 
@@ -126,8 +131,6 @@ def main() -> None:
             query_texts=texts,
             candidate_indices=candidates.indices,
             candidate_lexical_scores=candidates.scores,
-            passage_vectors=passage_vectors,
-            passage_ids=ft_passage_ids,
             top_n=int(k),
             rerank_k=min(int(args.rerank_k), int(args.top_k_candidates)),
             alpha=float(args.alpha),

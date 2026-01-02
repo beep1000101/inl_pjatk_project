@@ -12,6 +12,7 @@ from src.hybrid.lexical import (
     LexicalRetriever,
     TfidfLexicalRetriever,
 )
+from src.hybrid.reranker import SemanticReranker
 from src.hybrid.semantic import FastTextCosineReranker
 from src.models.fasttext import load_fasttext_model
 from src.preprocess.fasttext_vectors import load_fasttext_vectors, tokenize
@@ -27,9 +28,7 @@ def _default_fasttext_model_path(lang: str = "pl", dim: int = 300) -> Path:
 @dataclass
 class HybridPipeline:
     lexical: LexicalRetriever
-    reranker: FastTextCosineReranker
-    passage_vectors: np.ndarray
-    passage_ids: np.ndarray
+    reranker: SemanticReranker
 
     def retrieve(
         self,
@@ -62,8 +61,6 @@ class HybridPipeline:
             query_texts=[str(t) for t in query_texts],
             candidate_indices=candidates.indices,
             candidate_lexical_scores=candidates.scores,
-            passage_vectors=self.passage_vectors,
-            passage_ids=self.passage_ids,
             top_n=int(top_n),
         )
 
@@ -109,11 +106,14 @@ def build_hybrid_pipeline(
         )
 
     model = load_fasttext_model(model_path=model_path)
-    reranker = FastTextCosineReranker(model=model, tokenize=tokenize)
+    reranker = FastTextCosineReranker(
+        model=model,
+        tokenize=tokenize,
+        passage_vectors=passage_vectors,
+        passage_ids=ft_ids,
+    )
 
     return HybridPipeline(
         lexical=lexical_retriever,
         reranker=reranker,
-        passage_vectors=passage_vectors,
-        passage_ids=ft_ids,
     )

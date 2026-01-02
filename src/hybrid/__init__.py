@@ -7,7 +7,8 @@ from src.hybrid.lexical import (
     TfidfLexicalRetriever,
 )
 from src.hybrid.pipeline import HybridPipeline, build_hybrid_pipeline
-from src.hybrid.semantic import FastTextCosineReranker, RerankResult
+from src.hybrid.reranker import RerankResult
+from src.hybrid.semantic import FastTextCosineReranker
 
 __all__ = [
 

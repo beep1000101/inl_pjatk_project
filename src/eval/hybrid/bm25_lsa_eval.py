@@ -1,28 +1,20 @@
 import argparse
 import logging
-from pathlib import Path
-from typing import Any, cast
 
-import numpy as np
-
-from src.config.paths import CACHE_DIR
 from src.eval.metrics_io import append_metrics_csv, method_submissions_dir, utc_run_id
 from src.eval.retrieval_eval import evaluate_and_write_submission
-from src.hybrid.lexical import TfidfLexicalRetriever
-from src.hybrid.semantic import FastTextCosineReranker
-from src.models.fasttext import load_fasttext_model
-from src.preprocess.fasttext_vectors import load_fasttext_vectors, tokenize
+from src.hybrid.lexical import Bm25LexicalRetriever
+from src.hybrid.semantic_lsa import LSATfidfCosineReranker
 
 logger = logging.getLogger(__name__)
 
 
-def _default_fasttext_model_path(lang: str = "pl", dim: int = 300) -> Path:
-    return CACHE_DIR / "fasttext" / f"cc.{lang}.{dim}.bin"
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Evaluate hybrid TF-IDF -> fastText reranking on POLEVAL2022 passage retrieval dataset."
+        description=(
+            "Evaluate hybrid BM25 -> LSA (TruncatedSVD over TF-IDF) reranking "
+            "on POLEVAL2022 passage retrieval dataset."
+        )
     )
     parser.add_argument(
         "--dataset-id",
@@ -46,7 +38,7 @@ def main() -> None:
         "--top-k-candidates",
         type=int,
         default=500,
-        help="Lexical candidate set size (TF-IDF stage).",
+        help="Lexical candidate set size (BM25 stage).",
     )
     parser.add_argument(
         "--rerank-k",
@@ -60,17 +52,38 @@ def main() -> None:
         default=0.9,
         help="Lexical/semantic fusion weight: final = alpha*lex + (1-alpha)*sem.",
     )
+    parser.add_argument("--k1", type=float, default=1.5,
+                        help="BM25 k1 parameter.")
+    parser.add_argument("--b", type=float, default=0.75,
+                        help="BM25 b parameter.")
+    parser.add_argument(
+        "--lsa-d",
+        type=int,
+        default=256,
+        help="LSA dimensionality (TruncatedSVD n_components).",
+    )
+    parser.add_argument(
+        "--svd-n-iter",
+        type=int,
+        default=5,
+        help="TruncatedSVD randomized iterations (fit-time).",
+    )
+    parser.add_argument(
+        "--svd-random-state",
+        type=int,
+        default=42,
+        help="TruncatedSVD random_state (fit-time).",
+    )
+    parser.add_argument(
+        "--fit-svd-if-missing",
+        action="store_true",
+        help="If pretrained SVD is missing, fit it (slow) and cache under artifacts/lsa/.",
+    )
     parser.add_argument(
         "--chunk-size",
         type=int,
         default=10_000,
         help="Passage chunk size for vectorized lexical scoring (RAM tradeoff).",
-    )
-    parser.add_argument(
-        "--fasttext-model-path",
-        type=Path,
-        default=None,
-        help="Path to an existing fastText .bin model (no auto-download in hybrid scripts).",
     )
     parser.add_argument(
         "--submission-only",
@@ -83,43 +96,25 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)s:%(name)s:%(message)s")
 
-    lexical = TfidfLexicalRetriever.from_cache(args.subdataset)
-
-    ft = cast(dict[str, Any], load_fasttext_vectors(args.subdataset))
-    passage_vectors = cast(np.ndarray, ft["vectors"])
-    ft_passage_ids = cast(
-        np.ndarray, ft["passage_ids"]).astype(str, copy=False)
-
-    lex_passage_ids = np.asarray(lexical.passage_ids).astype(str, copy=False)
-    if lex_passage_ids.shape != ft_passage_ids.shape or not np.array_equal(lex_passage_ids, ft_passage_ids):
-        raise ValueError(
-            "Passage id alignment mismatch between TF-IDF artifacts and fastText vectors. "
-            "Rebuild caches using the same preprocessing pipeline so passage order matches."
-        )
-
-    model_path = args.fasttext_model_path or _default_fasttext_model_path()
-    if not model_path.is_file():
-        raise FileNotFoundError(
-            f"fastText model not found at: {model_path}. "
-            "Provide --fasttext-model-path pointing to an existing .bin (no auto-download in hybrid scripts)."
-        )
-
-    model = load_fasttext_model(model_path=model_path)
-    reranker = FastTextCosineReranker(
-        model=model,
-        tokenize=tokenize,
-        passage_vectors=passage_vectors,
-        passage_ids=ft_passage_ids,
+    lexical = Bm25LexicalRetriever.from_cache(args.subdataset)
+    reranker = LSATfidfCosineReranker.from_cache(
+        args.subdataset,
+        n_components=int(args.lsa_d),
+        random_state=int(args.svd_random_state),
+        n_iter=int(args.svd_n_iter),
+        fit_if_missing=bool(args.fit_svd_if_missing),
     )
 
     pairs_split = None if args.submission_only else args.split
 
-    def retriever(texts: list[str], k: int, progress=None) -> np.ndarray:
+    def retriever(texts: list[str], k: int, progress=None):
         candidates = lexical.retrieve(
             texts,
             top_k_candidates=int(args.top_k_candidates),
             chunk_size=int(args.chunk_size),
             progress=progress,
+            k1=float(args.k1),
+            b=float(args.b),
         )
         reranked = reranker.rerank(
             query_texts=texts,
@@ -131,7 +126,7 @@ def main() -> None:
         )
         return reranked.ids
 
-    run_name = "hybrid_tfidf_fasttext"
+    run_name = "hybrid_bm25_lsa"
     result = evaluate_and_write_submission(
         dataset_id=args.dataset_id,
         subdataset=args.subdataset,
@@ -175,7 +170,13 @@ def main() -> None:
             "submission_only",
             "top_k_candidates",
             "chunk_size",
-            "fasttext_model_path",
+            "bm25_k1",
+            "bm25_b",
+            "lsa_d",
+            "rerank_k",
+            "alpha",
+            "svd_n_iter",
+            "svd_random_state",
         ],
         row={
             "run_id": run_id,
@@ -196,7 +197,13 @@ def main() -> None:
             "submission_only": bool(args.submission_only),
             "top_k_candidates": int(args.top_k_candidates),
             "chunk_size": int(args.chunk_size),
-            "fasttext_model_path": str(model_path),
+            "bm25_k1": float(args.k1),
+            "bm25_b": float(args.b),
+            "lsa_d": int(args.lsa_d),
+            "rerank_k": int(args.rerank_k),
+            "alpha": float(args.alpha),
+            "svd_n_iter": int(args.svd_n_iter),
+            "svd_random_state": int(args.svd_random_state),
         },
     )
     print("Wrote metrics:", metrics_path)
