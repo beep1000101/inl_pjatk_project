@@ -37,13 +37,14 @@ ALLOWED_FIELDS = [
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # app/pages/<file>.py -> parents[1] is app/
+    return Path(__file__).resolve().parents[1]
 
 
 @st.cache_data(show_spinner=False)
 def _load_toy_passages() -> pd.DataFrame:
     root = _project_root()
-    path = root / "app" / "data" / "toy_passages.csv"
+    path = root / "data" / "toy_passages.csv"
     if not path.exists():
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -54,7 +55,7 @@ def _load_toy_passages() -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def _load_all_metrics() -> pd.DataFrame:
     root = _project_root()
-    submissions_dir = root / ".cache" / "submissions"
+    submissions_dir = root / "data" / "submissions"
     metric_files = sorted(submissions_dir.glob("**/metrics.csv"))
 
     frames: list[pd.DataFrame] = []
@@ -93,7 +94,7 @@ def _load_calibration_hits_points() -> pd.DataFrame:
     root = _project_root()
     path = (
         root
-        / ".cache"
+        / "data"
         / "calibration"
         / "wiki-trivia"
         / "test"
@@ -126,7 +127,7 @@ TF‑IDF i BM25 to solidne „baseline’y” na start, bo:
     st.markdown(
         r"""
 Artefakty leksykalne są liczone raz i cache’owane w
-`.cache/preprocessed_data/<method>/<subdataset>/...`.
+lokalnym cache (raz policzone, potem wielokrotnie używane).
 To przyspiesza ewaluację (bez ponownej wektoryzacji milionów passage’y) i utrzymuje stabilne
 indeksowanie wierszy, dzięki czemu „top indeksy → lookup” jest powtarzalne.
 
@@ -190,7 +191,7 @@ Artefakty w cache:
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w app/data/submissions/**/metrics.csv")
         return
 
     lexical = df[df["method"].isin(["tfidf_cosine", "bm25_okapi"])].copy()
@@ -294,12 +295,12 @@ $$
         st.dataframe(lookup[["indeks", "zapytanie", "passage_id", "text"]], width="stretch")
 
     st.subheader("Kalibracja: Hits@k vs k (wiki-trivia)")
-    st.caption("Pole: hits_at_k. Źródło: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
+    st.caption("Pole: hits_at_k. Źródło: app/data/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv")
 
     cal = _load_calibration_hits_points()
     if cal.empty:
         st.info(
-            "Nie znaleziono pliku kalibracji: .cache/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv"
+            "Nie znaleziono pliku kalibracji: app/data/calibration/wiki-trivia/test/hits_points_maxk200_log_p20.csv"
         )
     else:
         cal = cal[cal["method"].isin(["bm25", "tfidf"])].copy()

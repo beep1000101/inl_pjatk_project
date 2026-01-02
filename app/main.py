@@ -26,7 +26,7 @@ Do nawigacji użyj stron w lewym panelu:
 - Podsumowanie końcowe
 
 Uwagi:
-- Wszystkie wartości liczbowe w aplikacji są wczytywane z zapisanych metryk (np. `.cache/submissions/**/metrics.csv`).
+- Wszystkie wartości liczbowe w aplikacji są wczytywane z zapisanych metryk (np. `app/data/submissions/**/metrics.csv`).
 - Prezentacja dotyczy wyłącznie `wiki-trivia`.
 """
     )

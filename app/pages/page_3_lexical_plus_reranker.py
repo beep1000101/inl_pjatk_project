@@ -36,13 +36,14 @@ ALLOWED_FIELDS = [
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # app/pages/<file>.py -> parents[1] is app/
+    return Path(__file__).resolve().parents[1]
 
 
 @st.cache_data(show_spinner=False)
 def _load_toy_passages() -> pd.DataFrame:
     root = _project_root()
-    path = root / "app" / "data" / "toy_passages.csv"
+    path = root / "data" / "toy_passages.csv"
     if not path.exists():
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -52,7 +53,7 @@ def _load_toy_passages() -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def _load_all_metrics() -> pd.DataFrame:
     root = _project_root()
-    submissions_dir = root / ".cache" / "submissions"
+    submissions_dir = root / "data" / "submissions"
     metric_files = sorted(submissions_dir.glob("**/metrics.csv"))
 
     frames: list[pd.DataFrame] = []
@@ -108,7 +109,7 @@ Reranking ma sens tylko wtedy, gdy trafny passage w ogóle znajdzie się w zbior
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w app/data/submissions/**/metrics.csv")
         return
 
     hybrid = df[df["method"].isin(["hybrid_bm25_biencoder", "hybrid_tfidf_biencoder"])].copy()

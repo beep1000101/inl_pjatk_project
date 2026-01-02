@@ -1,0 +1,3 @@
+method,max_k,hits_at_max_k,frac_of_max,k_at_frac_of_max
+bm25,200,0.7498063445091248,0.9,87
+tfidf,200,0.6855151057243347,0.9,115

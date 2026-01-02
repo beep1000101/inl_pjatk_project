@@ -37,13 +37,14 @@ ALLOWED_FIELDS = [
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # app/pages/<file>.py -> parents[1] is app/
+    return Path(__file__).resolve().parents[1]
 
 
 @st.cache_data(show_spinner=False)
 def _load_all_metrics() -> pd.DataFrame:
     root = _project_root()
-    submissions_dir = root / ".cache" / "submissions"
+    submissions_dir = root / "data" / "submissions"
     metric_files = sorted(submissions_dir.glob("**/metrics.csv"))
 
     frames: list[pd.DataFrame] = []
@@ -108,7 +109,7 @@ passage — nawet jeśli metryki wrażliwe na pozycję nie zawsze rosną w tym s
 
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
-        st.error("Nie znaleziono metryk dla wiki-trivia w .cache/submissions/**/metrics.csv")
+        st.error("Nie znaleziono metryk dla wiki-trivia w app/data/submissions/**/metrics.csv")
         return
 
     methods = [
@@ -264,13 +265,13 @@ Ta strona pokazuje tylko to, co jest bezpośrednio zapisane w `metrics.csv`.
 """
     )
 
-    st.subheader("Uwaga: cache robi tu robotę")
+    st.subheader("Uwaga: Cache")
     st.markdown(
         """
 Ta prezentacja opiera się na cache, dzięki czemu eksperymenty da się uruchamiać w praktyce:
 
-- Artefakty leksykalne dla passage’ów są cache’owane w `.cache/preprocessed_data/...`.
-- Wyniki ewaluacji są cache’owane w `.cache/submissions/.../metrics.csv` — i to właśnie czyta ta aplikacja.
+- Artefakty leksykalne dla passage’ów są przechowywane lokalnie (żeby nie liczyć ich od zera za każdym razem).
+- Wyniki ewaluacji są cache’owane w `app/data/submissions/.../metrics.csv` — i to właśnie czyta ta aplikacja.
 
 Bez cache zarówno „wektoryzacja milionów passage’ów”, jak i „wiele wariantów eksperymentów” byłyby zbyt wolne.
 """

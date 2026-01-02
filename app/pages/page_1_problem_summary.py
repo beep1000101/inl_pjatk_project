@@ -7,7 +7,8 @@ import streamlit as st
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+  # app/pages/<file>.py -> parents[1] is app/
+  return Path(__file__).resolve().parents[1]
 
 
 def page() -> None:
@@ -21,9 +22,7 @@ To jest **PolEval 2022 Zadanie 3 (Passage Retrieval)**:
 
 - Dla każdego pytania należy zwrócić **uporządkowaną listę 10 identyfikatorów passage’y** z dostarczonego korpusu.
 
-Ta prezentacja jest **ograniczona wyłącznie do podzbioru `wiki-trivia`** (dane w cache):
-
-- `.cache/data/piotr-rybak__poleval2022-passage-retrieval-dataset/wiki-trivia`
+Ta prezentacja jest **ograniczona wyłącznie do podzbioru `wiki-trivia`**.
 
 ## Kontekst datasetu (wiki-trivia)
 
@@ -109,7 +108,7 @@ To uzasadnia dwie rodziny podejść:
 
 Wszystkie metryki pokazywane w pozostałych częściach aplikacji pochodzą z logów eksperymentów zapisanych jako wiersze w:
 
-- `.cache/submissions/<run_name>/metrics.csv`
+- `app/data/submissions/<run_name>/metrics.csv`
 
 (Na tej stronie nie ma metryk.)
 
