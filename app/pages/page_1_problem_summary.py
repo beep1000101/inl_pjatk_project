@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 
@@ -20,17 +21,78 @@ This repository implements **PolEval 2022 Task 3 (Passage Retrieval)**:
 
 - For each question, produce an **ordered list of 10 passage IDs** from the provided corpus.
 
-Why this framing:
-- The evaluation and submission contract is stable (always produce top-$k$, typically $k=10$), which makes it
-  easy to compare methods run-to-run.
-- The repository is organized to keep this contract consistent across baselines and hybrid systems.
-
 This Streamlit presentation is **scoped strictly to the `wiki-trivia` subdataset** from the cached dataset snapshot:
 
 - `.cache/data/piotr-rybak__poleval2022-passage-retrieval-dataset/wiki-trivia`
 
 The repository codebase supports cross-domain evaluation, but this app **ignores** all non‑`wiki-trivia` data and results.
 
+## Dataset context (wiki-trivia)
+
+For `wiki-trivia`, the corpus is a large collection of **Wikipedia passages** (split into paragraph-like chunks).
+The queries are **trivia / general-knowledge questions** (quiz-show style), and the retrieval system must return
+the **top-10 passage IDs** that most likely contain the answer.
+
+This context is why the repo emphasizes two families of approaches:
+- **Lexical methods (TF‑IDF, BM25)** are fast, interpretable, and training-free, but they depend on word overlap
+  and do not model word order.
+- **Neural/semantic reranking** can be more “meaning aware”, but is expensive to run over the full corpus.
+  That’s why the hybrid pipelines first use a lexical stage as a funnel, then rerank only a small candidate set.
+"""
+    )
+
+    st.subheader("Toy example (questions + passages)")
+    st.caption("Illustrative only (not real dataset rows)")
+
+    st.markdown("**Example questions**")
+    toy_questions = pd.DataFrame(
+        [
+            {"question_id": "q-001", "text": "What is the capital of France?"},
+            {"question_id": "q-002", "text": "Which planet is known as the Red Planet?"},
+            {"question_id": "q-003", "text": "Who wrote 'Pan Tadeusz'?"},
+        ]
+    )
+    st.dataframe(toy_questions, width="stretch")
+
+    st.markdown("**Example passages (Wikipedia-like)**")
+    toy_passages = pd.DataFrame(
+        [
+            {
+                "passage_id": "p-10",
+                "title": "Paris",
+                "text": "Paris is the capital and most populous city of France.",
+            },
+            {
+                "passage_id": "p-22",
+                "title": "Mars",
+                "text": "Mars is often called the Red Planet because of its reddish appearance.",
+            },
+            {
+                "passage_id": "p-31",
+                "title": "Adam Mickiewicz",
+                "text": "Adam Mickiewicz wrote the epic poem 'Pan Tadeusz'.",
+            },
+            {
+                "passage_id": "p-40",
+                "title": "France",
+                "text": "France is a country in Western Europe with many cities and regions.",
+            },
+        ]
+    )
+    st.dataframe(toy_passages, width="stretch")
+
+    st.markdown(
+        """
+**What the system outputs**
+
+For each question, the system returns an ordered list of 10 passage IDs (top‑10). For example:
+
+- for `q-001`: `[p-10, p-40, ...]` (10 total IDs)
+"""
+    )
+
+    st.markdown(
+        r"""
 ## Data and evaluation setup (repo structure)
 
 - Questions:
