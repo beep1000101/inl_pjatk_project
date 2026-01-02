@@ -130,6 +130,77 @@ Sources (repo docs):
 """
     )
 
+    st.subheader("How lexical spaces are created")
+    st.markdown(
+        r"""
+This project precomputes lexical artifacts once and caches them under
+`.cache/preprocessed_data/<method>/<subdataset>/...`.
+That makes evaluation fast (no re-vectorizing millions of passages each run) and keeps a stable
+row ordering so “top indices → lookup” is reproducible.
+
+Common passage preprocessing (both TF‑IDF and BM25, from `src/preprocess/*`):
+- Drop redirect-like entries where `text` starts with `REDIRECT` or `PATRZ`.
+- Build the text used for vectorization as `title + " " + text`.
+"""
+    )
+
+    st.markdown(
+    r"""
+#### TF‑IDF (used by `tfidf_cosine`)
+
+Implementation (see `src/preprocess/tf_idf_vectors.py`):
+- Uses `sklearn.feature_extraction.text.TfidfVectorizer` (defaults: `min_df=5`, `max_df=0.9`,
+    `max_features=500_000`, `dtype=float32`).
+- Fits on the passage corpus and produces a sparse TF‑IDF matrix $M \in \mathbb{R}^{N\times d}$.
+
+How it works (in words):
+- **TF** (term frequency) captures “does this passage talk about this word a lot?”.
+- **IDF** (inverse document frequency) downweights words that appear everywhere (like stop-ish words)
+    and upweights words that are rarer and therefore more discriminative.
+- The result is a vector space where a query and passage are “close” if they share informative words.
+
+Why it works for this project:
+- PolEval questions often have strong lexical cues (names, entities, key phrases).
+- TF‑IDF is training-free, quick to compute once cached, and a strong baseline for cross-domain retrieval.
+
+Cached artifacts:
+- `vectorizer.joblib` (fitted vectorizer)
+- `passages_tfidf.npz` (sparse matrix)
+- `passage_ids.npy` (row index → passage id)
+- `meta.json` (parameters + shapes)
+"""
+    )
+
+    st.markdown(
+    r"""
+#### BM25 (used by `bm25_okapi`)
+
+Implementation (see `src/preprocess/bm25_vectors.py`):
+- Builds a sparse **term-frequency** matrix using `sklearn.feature_extraction.text.CountVectorizer`
+    with `token_pattern=r"(?u)\b\w+\b"`, `lowercase=True`, `dtype=int32`.
+- Computes document lengths `doc_len` and an Okapi-style idf vector (saved to disk).
+
+How it works (in words):
+- BM25 is like TF‑IDF, but with two important tweaks:
+    - **Saturation**: repeating a word many times helps, but with diminishing returns.
+    - **Length normalization**: very long passages shouldn’t win just because they contain more words.
+
+Why it works for this project:
+- Wikipedia-like passages vary a lot in length; BM25’s normalization is a good fit.
+- It’s still purely lexical (fast, training-free), so it’s a reliable first-stage retriever to generate
+    candidates for rerankers.
+
+Cached artifacts:
+- `vectorizer.joblib`, `passages_tf.npz`, `passage_ids.npy`
+- `doc_len.npy`, `idf.npy`, `meta.json`
+
+Sources (repo docs/code):
+- `src/preprocess/README.md`
+- `src/preprocess/tf_idf_vectors.py`
+- `src/preprocess/bm25_vectors.py`
+"""
+    )
+
     df = _wiki_trivia_only(_load_all_metrics())
     if df.empty:
         st.error("No metrics found for wiki-trivia in .cache/submissions/**/metrics.csv")
@@ -164,7 +235,7 @@ Sources (repo docs):
     st.dataframe(lexical[show_cols], width="stretch")
 
     st.subheader("Toy example: lexical retrieval in vector space")
-    st.caption("A minimal walkthrough: passages → (made-up) matrix M → query vector q → cosine similarity → top indices → lookup")
+    st.caption("A minimal walkthrough: passages → (made-up) matrix M → query vector v → cosine similarity → top indices → lookup")
 
     toy = _load_toy_passages()
     if toy.empty:
@@ -219,7 +290,7 @@ $$
 Pick the indices of the best $k$ scores:
 
 $$
-	indices_{ext} = \operatorname{argmax}_k(u)
+\mathrm{indices} = \operatorname{argmax}_k(u)
 $$
 """
         )

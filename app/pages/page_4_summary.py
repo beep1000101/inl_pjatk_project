@@ -79,19 +79,34 @@ def _wiki_trivia_only(df: pd.DataFrame) -> pd.DataFrame:
 
 def page() -> None:
     st.title("Final Summary")
-    st.caption("Best method is selected by ndcg_at_k, within comparable runs.")
+    st.caption("Best method is selected by hits_at_k, within comparable runs.")
 
     st.markdown(
         """
 ### How to read this summary (repo rationale)
 
-- The repository treats **nDCG@10** as the primary decision metric for PolEval passage retrieval.
-- Supporting metrics (Hits/Recall/Precision/MRR) are logged to help diagnose whether improvements come from
-  “more hits anywhere in top‑10” vs “better ordering at the top”.
+- On this page we treat **Hits@k** as the main “did we retrieve anything relevant?” signal.
+- Rank-sensitive metrics (MRR/nDCG) are still useful for diagnosing whether improvements come from
+    “more hits anywhere in top‑k” vs “better ordering at the very top”.
 
 Sources (repo docs):
 - `src/eval/README.md`
 - `results/README.md`
+"""
+    )
+
+    st.subheader("Interpretation: what tends to happen")
+    st.markdown(
+        """
+- **Lexical retrieval is fast**: TF‑IDF/BM25 are sparse, cache-friendly, and scale well as a first pass.
+- **Reranking makes sense as a funnel**: lexical methods cheaply narrow the search space to a small candidate set,
+    then a more precise model reranks only those candidates.
+- **The reranker could be different**: this repo uses a bi-encoder in the logged hybrid runs, but the same funnel
+    pattern works with other rerankers too (e.g., cross-encoders, LSA/SVD projections, learned rankers), as long as
+    they score a limited candidate list.
+
+So if a hybrid method increases `hits_at_k`, it often means the funnel is finding at least one relevant passage
+more often—even if rank-sensitive metrics don’t always move in the same way.
 """
     )
 
@@ -111,6 +126,7 @@ Sources (repo docs):
         st.error("No eligible runs found for summary.")
         return
 
+    df["hits_at_k"] = pd.to_numeric(df["hits_at_k"], errors="coerce")
     df["ndcg_at_k"] = pd.to_numeric(df["ndcg_at_k"], errors="coerce")
     df["k"] = pd.to_numeric(df["k"], errors="coerce")
 
@@ -124,11 +140,11 @@ Sources (repo docs):
         "k",
         "n_questions",
         "n_labeled",
+        "hits_at_k",
         "ndcg_at_k",
         "recall_at_k",
         "precision_at_k",
         "mrr_at_k",
-        "hits_at_k",
         "top_k_candidates",
         "rerank_k",
         "biencoder_batch_size",
@@ -138,22 +154,22 @@ Sources (repo docs):
         "chunk_size",
     ]
     st.dataframe(
-        df[show_cols].sort_values(["k", "ndcg_at_k"], ascending=[True, False]),
+        df[show_cols].sort_values(["k", "hits_at_k"], ascending=[True, False]),
         width="stretch",
     )
 
     st.subheader("Compare metrics (toggle)")
     metric_options = [
+        "hits_at_k",
         "ndcg_at_k",
         "mrr_at_k",
         "recall_at_k",
         "precision_at_k",
-        "hits_at_k",
     ]
     selected_metrics = st.multiselect(
         "Metrics",
         options=metric_options,
-        default=["ndcg_at_k"],
+        default=["hits_at_k"],
     )
     k_values = sorted([k for k in df["k"].dropna().unique().tolist()])
     selected_k = st.selectbox("k", options=k_values) if k_values else None
@@ -228,21 +244,23 @@ These are computed at the selected $k$ and then averaged over labeled questions,
 """
         )
 
-    st.subheader("Best method (by ndcg_at_k)")
-    comparable = df.dropna(subset=["ndcg_at_k", "k"]).copy()
+    st.subheader("Best method (by hits_at_k)")
+    comparable = df.dropna(subset=["hits_at_k", "k"]).copy()
     if comparable.empty:
-        st.info("Cannot select best: missing ndcg_at_k or k.")
+        st.info("Cannot select best: missing hits_at_k or k.")
         return
+
+    comparable["hits_at_k"] = pd.to_numeric(comparable["hits_at_k"], errors="coerce")
 
     best_rows = []
     for k_val, group in comparable.groupby("k", dropna=False):
-        group = group.dropna(subset=["ndcg_at_k"])
+        group = group.dropna(subset=["hits_at_k"])
         if group.empty:
             continue
-        best_rows.append(group.sort_values("ndcg_at_k", ascending=False).iloc[0])
+        best_rows.append(group.sort_values("hits_at_k", ascending=False).iloc[0])
 
     best = pd.DataFrame(best_rows)
-    st.dataframe(best[["k", "method", "ndcg_at_k"]], width="stretch")
+    st.dataframe(best[["k", "method", "hits_at_k"]], width="stretch")
 
     st.subheader("Trade-offs visible in logs")
     st.markdown(
@@ -261,6 +279,18 @@ Repo note on observed behavior (current cached runs):
 
 Sources (repo docs):
 - `results/README.md`
+"""
+    )
+
+    st.subheader("Honorable mention: caching makes this manageable")
+    st.markdown(
+        """
+This repo relies heavily on caching so experiments are actually runnable:
+
+- Passage-side lexical artifacts are cached under `.cache/preprocessed_data/...` (see `src/preprocess/README.md`).
+- Evaluation outputs are cached under `.cache/submissions/.../metrics.csv`, which is what this app reads.
+
+Without caching, both “vectorize millions of passages” and “run many experiment variants” would be too slow to iterate on.
 """
     )
 
