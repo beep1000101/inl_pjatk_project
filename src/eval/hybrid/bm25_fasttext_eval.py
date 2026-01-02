@@ -48,6 +48,18 @@ def main() -> None:
         default=500,
         help="Lexical candidate set size (BM25 stage).",
     )
+    parser.add_argument(
+        "--rerank-k",
+        type=int,
+        default=100,
+        help="How many of the lexical candidates to actually rerank (prefix).",
+    )
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.9,
+        help="Lexical/semantic fusion weight: final = alpha*lex + (1-alpha)*sem.",
+    )
     parser.add_argument("--k1", type=float, default=1.5,
                         help="BM25 k1 parameter.")
     parser.add_argument("--b", type=float, default=0.75,
@@ -117,6 +129,8 @@ def main() -> None:
             passage_vectors=passage_vectors,
             passage_ids=ft_passage_ids,
             top_n=int(k),
+            rerank_k=min(int(args.rerank_k), int(args.top_k_candidates)),
+            alpha=float(args.alpha),
         )
         return reranked.ids
 

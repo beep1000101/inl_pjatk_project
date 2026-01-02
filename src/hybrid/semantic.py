@@ -29,6 +29,16 @@ def _cosine_scores(
     return (xn @ qn.T).ravel().astype(np.float32, copy=False)
 
 
+def _minmax01(x: np.ndarray, *, eps: float = 1e-12) -> np.ndarray:
+    x = np.asarray(x, dtype=np.float32)
+    if x.size == 0:
+        return x
+    lo = float(np.min(x))
+    hi = float(np.max(x))
+    denom = max(hi - lo, float(eps))
+    return (x - lo) / denom
+
+
 class FastTextCosineReranker:
     """Brute-force cosine reranker using fastText query embedding.
 
@@ -48,6 +58,8 @@ class FastTextCosineReranker:
         passage_vectors: np.ndarray,  # (N, D)
         passage_ids: np.ndarray,  # (N,)
         top_n: int = 10,
+        rerank_k: int | None = None,
+        alpha: float | None = None,
     ) -> RerankResult:
         top_n = int(top_n)
         if top_n <= 0:
@@ -68,19 +80,44 @@ class FastTextCosineReranker:
         )
 
         for i in range(nq):
-            idx_row = np.asarray(candidate_indices[i], dtype=np.int32)
-            lex_row = np.asarray(candidate_lexical_scores[i], dtype=np.float32)
+            idx_row_full = np.asarray(candidate_indices[i], dtype=np.int32)
+            lex_row_full = np.asarray(
+                candidate_lexical_scores[i], dtype=np.float32)
+
+            if rerank_k is not None:
+                rk = int(rerank_k)
+                if rk <= 0:
+                    raise ValueError("rerank_k must be > 0")
+                idx_row = idx_row_full[:rk]
+                lex_row = lex_row_full[:rk]
+            else:
+                idx_row = idx_row_full
+                lex_row = lex_row_full
 
             cand_vecs = np.asarray(passage_vectors[idx_row], dtype=np.float32)
             sem_scores = _cosine_scores(
                 query_vec=q_vecs[i], cand_vecs=cand_vecs)
             pids = np.asarray(passage_ids)[idx_row].astype(str, copy=False)
 
-            # Deterministic ordering: semantic desc, lexical desc, passage_id asc
-            order = np.lexsort((pids, -lex_row, -sem_scores))
+            if alpha is None:
+                # Deterministic ordering: semantic desc, lexical desc, passage_id asc
+                order = np.lexsort((pids, -lex_row, -sem_scores))
+            else:
+                a = float(alpha)
+                if not (0.0 <= a <= 1.0):
+                    raise ValueError("alpha must be in [0, 1]")
+                # Normalize scores per-query to a comparable range before mixing.
+                lex_n = _minmax01(lex_row)
+                sem_n = _minmax01(sem_scores)
+                fused = (a * lex_n + (1.0 - a) *
+                         sem_n).astype(np.float32, copy=False)
+                # Deterministic ordering: fused desc, then semantic desc, then passage_id asc
+                order = np.lexsort((pids, -sem_scores, -fused))
+
             order = order[:top_n]
 
             out_idx[i] = idx_row[order]
+            # Preserve semantic scores as the returned score for interpretability.
             out_scores[i] = sem_scores[order]
             out_ids[i] = pids[order]
 

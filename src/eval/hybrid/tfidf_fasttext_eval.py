@@ -49,6 +49,18 @@ def main() -> None:
         help="Lexical candidate set size (TF-IDF stage).",
     )
     parser.add_argument(
+        "--rerank-k",
+        type=int,
+        default=100,
+        help="How many of the lexical candidates to actually rerank (prefix).",
+    )
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.9,
+        help="Lexical/semantic fusion weight: final = alpha*lex + (1-alpha)*sem.",
+    )
+    parser.add_argument(
         "--chunk-size",
         type=int,
         default=10_000,
@@ -111,6 +123,8 @@ def main() -> None:
             passage_vectors=passage_vectors,
             passage_ids=ft_passage_ids,
             top_n=int(k),
+            rerank_k=min(int(args.rerank_k), int(args.top_k_candidates)),
+            alpha=float(args.alpha),
         )
         return reranked.ids
 
