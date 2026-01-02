@@ -430,30 +430,30 @@ Source (repo docs):
 """
         )
 
-    st.subheader("Best lexical baseline (by ndcg_at_k)")
-    comparable = lexical.dropna(subset=["ndcg_at_k", "k"]).copy()
+    st.subheader("Best lexical baseline (by hits_at_k)")
+    comparable = lexical.dropna(subset=["hits_at_k", "k"]).copy()
     if comparable.empty:
-        st.info("Cannot determine best run: ndcg_at_k missing.")
+        st.info("Cannot determine best run: hits_at_k missing.")
         return
 
     # Ensure numeric compare
-    comparable["ndcg_at_k"] = pd.to_numeric(comparable["ndcg_at_k"], errors="coerce")
+    comparable["hits_at_k"] = pd.to_numeric(comparable["hits_at_k"], errors="coerce")
     comparable["k"] = pd.to_numeric(comparable["k"], errors="coerce")
 
     # The repo logs show k=10 for both; keep grouping to avoid mismatched k comparisons.
     best_rows: list[pd.Series] = []
     for k_val, group in comparable.groupby("k", dropna=False):
-        group = group.dropna(subset=["ndcg_at_k"])
+        group = group.dropna(subset=["hits_at_k"])
         if group.empty:
             continue
-        best_rows.append(group.sort_values("ndcg_at_k", ascending=False).iloc[0])
+        best_rows.append(group.sort_values("hits_at_k", ascending=False).iloc[0])
 
     if not best_rows:
         st.info("No comparable groups found to select a best run.")
         return
 
     best = pd.DataFrame(best_rows)
-    st.dataframe(best[["method", "k", "ndcg_at_k"]], width="stretch")
+    st.dataframe(best[["method", "k", "hits_at_k"]], width="stretch")
 
 
 page()
